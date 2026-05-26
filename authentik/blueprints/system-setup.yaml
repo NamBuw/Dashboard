@@ -1,0 +1,161 @@
+# authentik/blueprints/system-setup.yaml
+version: 1
+metadata:
+  name: PTalk Ecosystem Setup
+  labels:
+    blueprints.goauthentik.io/instantiated-by: ptalk-system
+
+entries:
+  # 1. Groups for End Users
+  - model: authentik_core.group
+    id: group-account-owner
+    state: present
+    identifiers:
+      name: AccountOwner
+    attrs:
+      is_superuser: false
+  
+  - model: authentik_core.group
+    id: group-child
+    state: present
+    identifiers:
+      name: Child
+    attrs:
+      is_superuser: false
+
+  - model: authentik_core.group
+    id: group-elder
+    state: present
+    identifiers:
+      name: Elder
+    attrs:
+      is_superuser: false
+
+  # 2. Groups for Dashboard / Operations
+  - model: authentik_core.group
+    id: role-super-admin
+    state: present
+    identifiers:
+      name: SuperAdmin
+    attrs:
+      is_superuser: true
+
+  - model: authentik_core.group
+    id: role-product-admin
+    state: present
+    identifiers:
+      name: ProductAdmin
+    attrs:
+      is_superuser: false
+
+  - model: authentik_core.group
+    id: role-support
+    state: present
+    identifiers:
+      name: Support
+    attrs:
+      is_superuser: false
+
+  - model: authentik_core.group
+    id: role-viewer
+    state: present
+    identifiers:
+      name: Viewer
+    attrs:
+      is_superuser: false
+
+  # 3. Property Map to embed Roles into JWT Claims
+  - model: authentik_providers_oauth2.scopemapping
+    id: scope-roles
+    state: present
+    identifiers:
+      name: Map Roles to JWT
+    attrs:
+      scope_name: roles
+      description: "Map Authentik groups to 'roles' claim in JWT"
+      expression: |
+        return {
+            "roles": [group.name for group in request.user.ak_groups.all()]
+        }
+
+  # 4. OAuth2 / OIDC Providers & Applications
+  # 4.1 Kid Mentor
+  - model: authentik_providers_oauth2.oauth2provider
+    id: provider-kid-mentor
+    state: present
+    identifiers:
+      name: Provider Kid Mentor
+    attrs:
+      client_id: kid-mentor-client
+      client_secret: kid-mentor-secret-key
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
+        - !KeyOf scope-roles
+      redirect_uris: "http://localhost:3000/api/auth/callback/authentik\napp://kidmentor/callback"
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Default Keypair]]
+
+  - model: authentik_core.application
+    id: app-kid-mentor
+    state: present
+    identifiers:
+      name: Kid Mentor App
+      slug: kid-mentor
+    attrs:
+      provider: !KeyOf provider-kid-mentor
+
+  # 4.2 P Assistant
+  - model: authentik_providers_oauth2.oauth2provider
+    id: provider-p-assistant
+    state: present
+    identifiers:
+      name: Provider P Assistant
+    attrs:
+      client_id: p-assistant-client
+      client_secret: p-assistant-secret-key
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
+        - !KeyOf scope-roles
+      redirect_uris: "http://localhost:3001/api/auth/callback/authentik\napp://passistant/callback"
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Default Keypair]]
+
+  - model: authentik_core.application
+    id: app-p-assistant
+    state: present
+    identifiers:
+      name: P Assistant App
+      slug: p-assistant
+    attrs:
+      provider: !KeyOf provider-p-assistant
+
+  # 4.3 Dashboard
+  - model: authentik_providers_oauth2.oauth2provider
+    id: provider-dashboard
+    state: present
+    identifiers:
+      name: Provider Dashboard
+    attrs:
+      client_id: dashboard-client
+      client_secret: dashboard-secret-key
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
+        - !KeyOf scope-roles
+      redirect_uris: "http://localhost:3002/api/auth/callback/authentik\nhttp://localhost:8080/callback"
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Default Keypair]]
+
+  - model: authentik_core.application
+    id: app-dashboard
+    state: present
+    identifiers:
+      name: Dashboard App
+      slug: dashboard
+    attrs:
+      provider: !KeyOf provider-dashboard
