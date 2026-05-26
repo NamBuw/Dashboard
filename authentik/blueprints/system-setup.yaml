@@ -78,6 +78,32 @@ entries:
             "roles": [group.name for group in request.user.ak_groups.all()]
         }
 
+  - model: authentik_providers_oauth2.scopemapping
+    id: scope-user-type
+    state: present
+    identifiers:
+      name: Map User Type to JWT
+    attrs:
+      scope_name: user_type
+      description: "Map user_type attribute to 'user_type' claim in JWT"
+      expression: |
+        return {
+            "user_type": request.user.attributes.get("user_type", "dashboard")
+        }
+
+  - model: authentik_providers_oauth2.scopemapping
+    id: scope-assigned-products
+    state: present
+    identifiers:
+      name: Map Assigned Products to JWT
+    attrs:
+      scope_name: assigned_products
+      description: "Map assigned_products attribute to 'assigned_products' claim in JWT"
+      expression: |
+        return {
+            "assigned_products": request.user.attributes.get("assigned_products", [])
+        }
+
   # 4. OAuth2 / OIDC Providers & Applications
   # 4.1 Kid Mentor
   - model: authentik_providers_oauth2.oauth2provider
@@ -94,6 +120,8 @@ entries:
         - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
         - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
         - !KeyOf scope-roles
+        - !KeyOf scope-user-type
+        - !KeyOf scope-assigned-products
       redirect_uris: "http://localhost:3000/api/auth/callback/authentik\napp://kidmentor/callback"
       signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Default Keypair]]
 
@@ -121,6 +149,8 @@ entries:
         - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
         - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
         - !KeyOf scope-roles
+        - !KeyOf scope-user-type
+        - !KeyOf scope-assigned-products
       redirect_uris: "http://localhost:3001/api/auth/callback/authentik\napp://passistant/callback"
       signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Default Keypair]]
 
@@ -148,6 +178,8 @@ entries:
         - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
         - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
         - !KeyOf scope-roles
+        - !KeyOf scope-user-type
+        - !KeyOf scope-assigned-products
       redirect_uris: "http://localhost:3002/api/auth/callback/authentik\nhttp://localhost:8080/callback"
       signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Default Keypair]]
 
