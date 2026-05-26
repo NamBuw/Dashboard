@@ -13,7 +13,7 @@ export interface JWTPayload {
   email_verified: boolean;
   name: string;
   preferred_username: string;
-  groups: string[];
+  roles: string[];
   user_type: UserType;
   assigned_products: string[];
 }
@@ -23,7 +23,7 @@ export interface SessionUser {
   email: string;
   name: string;
   role: DashboardRole;
-  groups: string[];
+  roles: string[];
   user_type: UserType;
   assigned_products: string[];
 }
@@ -35,8 +35,8 @@ const ROLE_HIERARCHY: DashboardRole[] = [
   "Viewer",
 ];
 
-export function getUserRole(groups: string[]): DashboardRole {
-  return ROLE_HIERARCHY.find((role) => groups.includes(role)) ?? "Viewer";
+export function getUserRole(roles: string[]): DashboardRole {
+  return ROLE_HIERARCHY.find((role) => roles.includes(role)) ?? "Viewer";
 }
 
 export interface NavItem {

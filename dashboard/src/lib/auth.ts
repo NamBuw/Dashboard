@@ -28,7 +28,7 @@ export const authConfig: NextAuthConfig = {
     jwt({ token, profile }) {
       if (profile) {
         token.sub = profile.sub ?? undefined;
-        token.groups = (profile as Record<string, unknown>).groups ?? [];
+        token.roles = (profile as Record<string, unknown>).roles ?? [];
         token.user_type =
           (profile as Record<string, unknown>).user_type ?? "dashboard";
         token.assigned_products =
@@ -37,14 +37,14 @@ export const authConfig: NextAuthConfig = {
       return token;
     },
     session({ session, token }) {
-      const groups = (token.groups as string[]) ?? [];
+      const roles = (token.roles as string[]) ?? [];
       session.user = {
         ...session.user,
         id: token.sub ?? "",
         email: session.user?.email ?? "",
         name: session.user?.name ?? "",
-        role: getUserRole(groups),
-        groups,
+        role: getUserRole(roles),
+        roles,
         user_type: ((token.user_type as string) ?? "dashboard") as SessionUser["user_type"],
         assigned_products: (token.assigned_products as string[]) ?? [],
       };
