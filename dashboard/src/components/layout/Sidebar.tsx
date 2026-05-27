@@ -11,22 +11,35 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  MessageSquare,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 
 const navItems = [
   { label: "Tổng quan", href: "/dashboard", icon: LayoutDashboard },
   { label: "Quản lý User", href: "/users", icon: Users },
-  { label: "Thiết bị", href: "/devices", icon: Monitor },
-  { label: "Phân tích", href: "/analytics", icon: BarChart3 },
-  { label: "Cảnh báo", href: "/alerts", icon: Bell },
-  { label: "Cài đặt", href: "/settings", icon: Settings },
+  { label: "Lịch sử Chat", href: "/chats", icon: MessageSquare },
+  { label: "Thiết bị PTalk", href: "/devices", icon: Monitor },
+  { label: "Robot Assistant", href: "/products/ptalk", icon: LayoutDashboard },
+  { label: "Kid Mentor (Học tập)", href: "/products/kidmentor", icon: BarChart3 },
+  { label: "Cài đặt & Monitor", href: "/settings", icon: Settings },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { data: session } = useSession();
   const [collapsed, setCollapsed] = useState(false);
+
+  const isSuperUser = session?.user?.is_superuser;
+
+  const filteredItems = navItems.filter((item) => {
+    if ((item.href === "/users" || item.href === "/settings") && !isSuperUser) {
+      return false;
+    }
+    return true;
+  });
 
   return (
     <aside
@@ -53,7 +66,7 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex-1 py-4 space-y-1 px-2">
-        {navItems.map((item) => {
+        {filteredItems.map((item) => {
           const Icon = item.icon;
           const isActive =
             pathname === item.href || pathname.startsWith(item.href + "/");

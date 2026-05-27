@@ -1,15 +1,40 @@
 "use client";
 
 import { useState } from "react";
-import { LogIn, Shield } from "lucide-react";
+import { signIn } from "next-auth/react";
+import Link from "next/link";
+import { LogIn, Shield, Loader2, Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
-  const [isLoading, setIsLoading] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  function handleLogin() {
-    setIsLoading(true);
-    window.location.href = "/api/auth/signin/authentik";
-  }
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!username || !password) {
+      setError("Vui lòng nhập đầy đủ thông tin");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    const result = await signIn("credentials", {
+      username,
+      password,
+      redirect: false,
+    });
+
+    if (result?.error) {
+      setError("Sai tên đăng nhập hoặc mật khẩu");
+      setLoading(false);
+    } else {
+      window.location.href = "/dashboard";
+    }
+  };
 
   return (
     <div className="min-h-screen flex">
@@ -59,46 +84,88 @@ export default function LoginPage() {
           <div className="text-center lg:text-left">
             <h2 className="text-2xl font-bold text-foreground">Đăng nhập</h2>
             <p className="text-muted mt-2">
-              Sử dụng tài khoản Authentik để truy cập dashboard
+              Sử dụng tài khoản PTalk để truy cập dashboard
             </p>
           </div>
 
-          <div className="space-y-4">
-            <button
-              onClick={handleLogin}
-              disabled={isLoading}
-              className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-accent hover:bg-accent-hover text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? (
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                <LogIn size={20} />
-              )}
-              {isLoading ? "Đang chuyển hướng..." : "Đăng nhập với Authentik"}
-            </button>
-
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-border" />
+          <form onSubmit={handleLogin} className="space-y-4">
+            {error && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                {error}
               </div>
-              <div className="relative flex justify-center text-xs">
-                <span className="px-2 bg-background text-muted">
-                  Single Sign-On
-                </span>
+            )}
+
+            <div>
+              <label htmlFor="username" className="block text-sm font-medium text-foreground mb-1.5">
+                Tên đăng nhập
+              </label>
+              <input
+                id="username"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Nhập username"
+                autoComplete="username"
+                className="w-full px-4 py-3 border border-border rounded-lg bg-background text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
+              />
+            </div>
+
+            <div>
+              <div className="flex justify-between items-center mb-1.5">
+                <label htmlFor="password" className="block text-sm font-medium text-foreground">
+                  Mật khẩu
+                </label>
+                <Link
+                  href="/forgot-password"
+                  className="text-xs text-accent hover:underline font-semibold"
+                >
+                  Quên mật khẩu?
+                </Link>
+              </div>
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Nhập mật khẩu"
+                  autoComplete="current-password"
+                  className="w-full px-4 py-3 border border-border rounded-lg bg-background text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors pr-12"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground transition-colors"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
             </div>
 
-            <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-lg">
-              <Shield size={20} className="text-accent mt-0.5 shrink-0" />
-              <div>
-                <p className="text-sm font-medium text-foreground">
-                  Xác thực tập trung
-                </p>
-                <p className="text-xs text-muted mt-1">
-                  Đăng nhập một lần, truy cập toàn bộ hệ sinh thái sản phẩm.
-                  Tài khoản được quản lý bởi Authentik.
-                </p>
-              </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-accent hover:bg-accent-hover text-white rounded-lg font-medium transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <Loader2 size={20} className="animate-spin" />
+              ) : (
+                <LogIn size={20} />
+              )}
+              {loading ? "Đang đăng nhập..." : "Đăng nhập"}
+            </button>
+          </form>
+
+          <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-lg">
+            <Shield size={20} className="text-accent mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-foreground">
+                Bảo mật JWT
+              </p>
+              <p className="text-xs text-muted mt-1">
+                Xác thực bằng JSON Web Token. Mật khẩu được mã hoá bcrypt.
+                Chỉ admin mới có quyền truy cập đầy đủ.
+              </p>
             </div>
           </div>
         </div>

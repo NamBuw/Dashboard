@@ -26,6 +26,8 @@ export interface SessionUser {
   roles: string[];
   user_type: UserType;
   assigned_products: string[];
+  subscription_tier?: string;
+  is_superuser?: boolean;
 }
 
 const ROLE_HIERARCHY: DashboardRole[] = [

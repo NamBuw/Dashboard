@@ -2,6 +2,7 @@
 
 import { Menu, Bell, LogOut, User } from "lucide-react";
 import { useState } from "react";
+import { signOut } from "next-auth/react";
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -61,7 +62,7 @@ export default function Header({ onMenuClick, user }: HeaderProps) {
               </div>
               <button
                 onClick={() => {
-                  setShowDropdown(false);
+                  signOut({ callbackUrl: "/login" });
                 }}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-gray-50 transition-colors"
               >

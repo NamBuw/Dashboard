@@ -180,7 +180,7 @@ entries:
         - !KeyOf scope-roles
         - !KeyOf scope-user-type
         - !KeyOf scope-assigned-products
-      redirect_uris: "http://localhost:3002/api/auth/callback/authentik\nhttp://localhost:8080/callback"
+      redirect_uris: "https://dashboard.ctslab.net/api/auth/callback/authentik\nhttp://localhost:4321/api/auth/callback/authentik"
       signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Default Keypair]]
 
   - model: authentik_core.application
