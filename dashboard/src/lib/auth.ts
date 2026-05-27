@@ -12,10 +12,28 @@ declare module "next-auth" {
 }
 
 const AUTH_API_URL = process.env.AUTH_API_URL || "https://auth.ctslab.net";
+const AUTHENTIK_ISSUER = process.env.AUTHENTIK_ISSUER || "http://localhost:9090/application/o/dashboard/";
+const AUTHENTIK_CLIENT_ID = process.env.AUTHENTIK_CLIENT_ID || "dashboard-client";
+const AUTHENTIK_CLIENT_SECRET = process.env.AUTHENTIK_CLIENT_SECRET || "dashboard-secret-key";
 
 export const authConfig: NextAuthConfig = {
   debug: process.env.NODE_ENV === "development",
   providers: [
+    // --- Authentik OIDC Provider (primary SSO) ---
+    {
+      id: "authentik",
+      name: "Authentik",
+      type: "oidc",
+      issuer: AUTHENTIK_ISSUER,
+      clientId: AUTHENTIK_CLIENT_ID,
+      clientSecret: AUTHENTIK_CLIENT_SECRET,
+      authorization: {
+        params: {
+          scope: "openid email profile roles user_type assigned_products",
+        },
+      },
+    },
+    // --- Legacy Credentials Provider (FastAPI auth) ---
     Credentials({
       name: "PTalk Auth",
       credentials: {
@@ -28,7 +46,6 @@ export const authConfig: NextAuthConfig = {
         }
 
         try {
-          // Login to auth service
           const loginRes = await fetch(`${AUTH_API_URL}/auth/login`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -44,7 +61,6 @@ export const authConfig: NextAuthConfig = {
 
           const tokens = await loginRes.json();
 
-          // Get user info
           const meRes = await fetch(`${AUTH_API_URL}/auth/me`, {
             headers: { Authorization: `Bearer ${tokens.access_token}` },
           });
@@ -55,7 +71,6 @@ export const authConfig: NextAuthConfig = {
 
           const user = await meRes.json();
 
-          // Map roles based on user properties
           const roles: string[] = [];
           if (user.is_superuser) {
             roles.push("SuperAdmin");
@@ -92,8 +107,33 @@ export const authConfig: NextAuthConfig = {
     strategy: "jwt",
   },
   callbacks: {
-    jwt({ token, user }) {
-      if (user) {
+    async jwt({ token, user, account, profile }) {
+      // Authentik OIDC login
+      if (account?.provider === "authentik" && profile) {
+        const authentikProfile = profile as Record<string, unknown>;
+        const groups = (authentikProfile.groups as string[]) ?? [];
+
+        const roles: string[] = [];
+        if (groups.includes("SuperAdmin")) {
+          roles.push("SuperAdmin");
+          token.is_superuser = true;
+        }
+        if (groups.includes("ProductAdmin")) roles.push("ProductAdmin");
+        if (groups.includes("Support")) roles.push("Support");
+        if (groups.includes("Viewer")) roles.push("Viewer");
+
+        token.sub = authentikProfile.sub as string;
+        token.name = (authentikProfile.name as string) ?? (authentikProfile.preferred_username as string);
+        token.email = authentikProfile.email as string;
+        token.roles = roles;
+        token.user_type = (authentikProfile.user_type as string) ?? "dashboard";
+        token.subscription_tier = "pro";
+        token.accessToken = account.access_token;
+        token.authentikUserId = authentikProfile.sub as string;
+      }
+
+      // Credentials login (legacy)
+      if (user && !account) {
         token.sub = (user as Record<string, unknown>).id as string;
         token.name = (user as Record<string, unknown>).name as string;
         token.email = (user as Record<string, unknown>).email as string;
@@ -103,6 +143,7 @@ export const authConfig: NextAuthConfig = {
         token.is_superuser = (user as Record<string, unknown>).is_superuser as boolean;
         token.accessToken = (user as Record<string, unknown>).accessToken as string;
       }
+
       return token;
     },
     session({ session, token }) {
@@ -116,8 +157,8 @@ export const authConfig: NextAuthConfig = {
         roles,
         user_type: ((token.user_type as string) ?? "dashboard") as SessionUser["user_type"],
         assigned_products: [],
-        subscription_tier: token.subscription_tier as string,
-        is_superuser: token.is_superuser as boolean,
+        subscription_tier: (token.subscription_tier as string) ?? "basic",
+        is_superuser: (token.is_superuser as boolean) ?? false,
       };
       session.accessToken = token.accessToken as string;
       return session;
@@ -128,8 +169,8 @@ export const authConfig: NextAuthConfig = {
       const isSuperUser = auth?.user?.is_superuser;
       const { pathname } = request.nextUrl;
 
-      const isOnDashboard = pathname.startsWith("/dashboard") || 
-                          pathname.startsWith("/chats") || 
+      const isOnDashboard = pathname.startsWith("/dashboard") ||
+                          pathname.startsWith("/chats") ||
                           pathname.startsWith("/devices") ||
                           pathname.startsWith("/products");
       const isOnAdminOnly = pathname.startsWith("/users") || pathname.startsWith("/settings");
@@ -140,12 +181,10 @@ export const authConfig: NextAuthConfig = {
           return Response.redirect(new URL("/login", request.nextUrl));
         }
 
-        // Basic tier (Demo User) is restricted from Web Dashboard (unless superuser)
         if (subscriptionTier === "basic" && !isSuperUser) {
           return Response.redirect(new URL("/unauthorized", request.nextUrl));
         }
 
-        // Normal users (non-superusers) are restricted from Admin-only pages
         if (isOnAdminOnly && !isSuperUser) {
           return Response.redirect(new URL("/unauthorized", request.nextUrl));
         }

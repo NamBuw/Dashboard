@@ -16,9 +16,40 @@ import {
   FileText,
   FileCode,
   AlertCircle,
-  Send
+  Send,
+  Bot,
+  Smartphone,
+  ChevronLeft,
 } from "lucide-react";
 import { clsx } from "clsx";
+
+// --- New Chat Session/Message types ---
+interface ChatSession {
+  id: string;
+  userId: string;
+  deviceId: string | null;
+  productSource: string;
+  channel: string;
+  title: string | null;
+  messageCount: number;
+  avgSentiment: string | null;
+  startedAt: string;
+  lastMessageAt: string | null;
+  userName: string | null;
+  deviceLabel: string | null;
+}
+
+interface ChatMessage {
+  id: string;
+  sender: string;
+  messageType: string;
+  content: string;
+  audioUrl: string | null;
+  audioDuration: number | null;
+  sentiment: string | null;
+  emotionCode: string | null;
+  createdAt: string;
+}
 
 interface ApiUser {
   id: string;
@@ -70,6 +101,16 @@ export default function ChatManagementPage() {
   const [simSentiment, setSimSentiment] = useState("neutral"); // 'positive', 'neutral', 'negative'
   const [sendingMessage, setSendingMessage] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+
+  // Chat source tab: 'robot' (old conversation_logs) or 'app' (new chat_sessions)
+  const [chatSource, setChatSource] = useState<"robot" | "app">("robot");
+
+  // App chat sessions state
+  const [appSessions, setAppSessions] = useState<ChatSession[]>([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+  const [selectedSession, setSelectedSession] = useState<ChatSession | null>(null);
+  const [appMessages, setAppMessages] = useState<ChatMessage[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -126,6 +167,49 @@ export default function ChatManagementPage() {
       setChatLogs([]);
     }
   }, [selectedUser, filterSource, fetchChatsForUser]);
+
+  // Fetch app chat sessions for selected user
+  const fetchAppSessions = useCallback(async (userId: string) => {
+    setLoadingSessions(true);
+    try {
+      const res = await fetch(`/api/v1/chat/sessions?limit=50`);
+      const data = await res.json();
+      // Filter sessions for this user
+      const userSessions = (data.sessions || []).filter(
+        (s: ChatSession) => s.userId === userId
+      );
+      setAppSessions(userSessions);
+    } catch (err) {
+      console.error("Failed to fetch app sessions", err);
+      setAppSessions([]);
+    } finally {
+      setLoadingSessions(false);
+    }
+  }, []);
+
+  // Fetch messages for a specific session
+  const fetchSessionMessages = useCallback(async (sessionId: string) => {
+    setLoadingMessages(true);
+    try {
+      const res = await fetch(`/api/v1/chat/messages?session_id=${sessionId}&limit=100`);
+      const data = await res.json();
+      setAppMessages(data.messages || []);
+    } catch (err) {
+      console.error("Failed to fetch session messages", err);
+      setAppMessages([]);
+    } finally {
+      setLoadingMessages(false);
+    }
+  }, []);
+
+  // Load app sessions when user changes and chatSource is 'app'
+  useEffect(() => {
+    if (selectedUser && chatSource === "app") {
+      fetchAppSessions(selectedUser.id);
+      setSelectedSession(null);
+      setAppMessages([]);
+    }
+  }, [selectedUser, chatSource, fetchAppSessions]);
 
   // Scroll to bottom when chats load
   useEffect(() => {
@@ -466,7 +550,36 @@ export default function ChatManagementPage() {
         </p>
       </div>
 
-      {/* Main Grid View */}
+      {/* Chat Source Tabs */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setChatSource("robot")}
+          className={clsx(
+            "px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer border",
+            chatSource === "robot"
+              ? "bg-purple-500/20 text-purple-400 border-purple-500/30"
+              : "bg-white/5 text-muted border-white/5 hover:border-white/10"
+          )}
+        >
+          <Bot size={14} />
+          Robot Chat (Voice)
+        </button>
+        <button
+          onClick={() => setChatSource("app")}
+          className={clsx(
+            "px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer border",
+            chatSource === "app"
+              ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/30"
+              : "bg-white/5 text-muted border-white/5 hover:border-white/10"
+          )}
+        >
+          <Smartphone size={14} />
+          App Chat (Kid Mentor / PTalk)
+        </button>
+      </div>
+
+      {/* Main Grid View - Robot Chat */}
+      {chatSource === "robot" && (
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         
         {/* Left Side Column: User List & Filters (4 Columns) */}
@@ -861,6 +974,166 @@ export default function ChatManagementPage() {
         </div>
 
       </div>
+      )}
+
+      {/* App Chat View */}
+      {chatSource === "app" && (
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        {/* Left: Sessions list */}
+        <div className="lg:col-span-4 flex flex-col gap-4">
+          <div className="glass-card rounded-2xl p-4 flex flex-col gap-3 flex-1">
+            <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+              <Smartphone size={16} className="text-accent" />
+              Phiên chat (App)
+            </h2>
+
+            <div className="flex-1 overflow-y-auto max-h-[600px] pr-1 space-y-2 mt-2 custom-scrollbar">
+              {loadingSessions ? (
+                <div className="py-12 text-center text-xs text-muted">
+                  <div className="w-5 h-5 rounded-full border-2 border-accent border-t-transparent animate-spin mx-auto mb-2" />
+                  Đang nạp phiên chat...
+                </div>
+              ) : appSessions.length === 0 ? (
+                <div className="py-12 text-center text-xs text-muted border border-dashed border-white/5 rounded-xl">
+                  Không có phiên chat nào
+                </div>
+              ) : (
+                appSessions.map((session) => {
+                  const isSelected = selectedSession?.id === session.id;
+                  return (
+                    <button
+                      key={session.id}
+                      onClick={() => {
+                        setSelectedSession(session);
+                        fetchSessionMessages(session.id);
+                      }}
+                      className={clsx(
+                        "w-full text-left p-3 rounded-xl border transition-all flex flex-col gap-1 cursor-pointer",
+                        isSelected
+                          ? "bg-accent/15 border-accent text-foreground shadow-[0_0_12px_rgba(6,182,212,0.15)]"
+                          : "bg-white/[0.02] border-white/5 hover:border-white/10 text-muted hover:text-foreground"
+                      )}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-xs text-foreground truncate">
+                          {session.title || `${session.productSource} - ${session.channel}`}
+                        </span>
+                        <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                          {session.productSource}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] text-muted">
+                        <span>{session.messageCount} tin nhắn</span>
+                        <span>{session.lastMessageAt ? new Date(session.lastMessageAt).toLocaleDateString("vi-VN") : ""}</span>
+                      </div>
+                      {session.deviceLabel && (
+                        <span className="text-[9px] text-muted truncate">Thiết bị: {session.deviceLabel}</span>
+                      )}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Right: Messages for selected session */}
+        <div className="lg:col-span-8 flex flex-col gap-4">
+          {!selectedSession ? (
+            <div className="glass-card rounded-2xl p-8 flex-1 flex flex-col items-center justify-center text-center text-muted min-h-[400px]">
+              <MessageSquare size={48} className="text-accent/30 animate-pulse mb-3" />
+              <h3 className="text-sm font-bold text-foreground">Chưa chọn phiên chat</h3>
+              <p className="text-xs text-muted max-w-sm mt-1.5">
+                Chọn một phiên chat từ danh sách bên trái để xem chi tiết tin nhắn.
+              </p>
+            </div>
+          ) : (
+            <div className="glass-card rounded-2xl p-4 flex-1 flex flex-col min-h-[350px] max-h-[600px]">
+              {/* Session header */}
+              <div className="flex items-center gap-3 pb-3 border-b border-white/5 mb-3">
+                <button
+                  onClick={() => {
+                    setSelectedSession(null);
+                    setAppMessages([]);
+                  }}
+                  className="p-1 rounded-lg hover:bg-white/5 cursor-pointer"
+                >
+                  <ChevronLeft size={16} className="text-muted" />
+                </button>
+                <div>
+                  <h3 className="text-sm font-bold text-foreground">
+                    {selectedSession.title || `${selectedSession.productSource} - ${selectedSession.channel}`}
+                  </h3>
+                  <span className="text-[10px] text-muted">
+                    {selectedSession.messageCount} tin nhắn • {selectedSession.channel}
+                  </span>
+                </div>
+              </div>
+
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto pr-1 space-y-3 custom-scrollbar">
+                {loadingMessages ? (
+                  <div className="h-full flex flex-col items-center justify-center text-xs text-muted">
+                    <div className="w-6 h-6 rounded-full border-2 border-accent border-t-transparent animate-spin mb-2" />
+                    Đang lấy tin nhắn...
+                  </div>
+                ) : appMessages.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-xs text-muted">
+                    <AlertCircle size={24} className="text-muted/40 mb-2" />
+                    Không có tin nhắn trong phiên chat này
+                  </div>
+                ) : (
+                  appMessages.map((msg) => {
+                    const isUser = msg.sender === "user";
+                    return (
+                      <div
+                        key={msg.id}
+                        className={clsx(
+                          "flex w-full",
+                          isUser ? "justify-end" : "justify-start"
+                        )}
+                      >
+                        <div className={clsx(
+                          "max-w-[70%] p-3.5 rounded-2xl relative border flex flex-col gap-1.5",
+                          isUser
+                            ? "bg-gradient-to-br from-cyan-500/10 to-cyan-500/0 border-cyan-500/20 text-cyan-50 rounded-br-sm"
+                            : "bg-gradient-to-br from-purple-500/10 to-purple-500/0 border-purple-500/20 text-purple-50 rounded-bl-sm"
+                        )}>
+                          <div className="flex items-center justify-between gap-4">
+                            <span className={clsx(
+                              "text-[9px] font-extrabold uppercase tracking-wide",
+                              isUser ? "text-cyan-400" : "text-purple-400"
+                            )}>
+                              {isUser ? "User" : msg.sender === "robot" ? "Robot" : "System"}
+                            </span>
+                            {msg.sentiment && msg.sentiment !== "neutral" && (
+                              <span className={clsx(
+                                "text-[8px] font-bold px-1.5 py-0.5 rounded border",
+                                msg.sentiment === "positive" ? "bg-success/15 text-success border-success/30" :
+                                msg.sentiment === "negative" ? "bg-danger/15 text-danger border-danger/30" :
+                                "bg-white/5 text-muted border-white/10"
+                              )}>
+                                {msg.sentiment}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs leading-relaxed font-medium whitespace-pre-wrap">
+                            {msg.content}
+                          </p>
+                          <span className="text-[8px] text-muted self-end mt-1 block font-mono">
+                            {new Date(msg.createdAt).toLocaleString("vi-VN")}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+      )}
     </div>
   );
 }

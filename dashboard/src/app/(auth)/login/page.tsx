@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
-import { LogIn, Shield, Loader2, Eye, EyeOff } from "lucide-react";
+import { LogIn, Shield, Loader2, Eye, EyeOff, KeyRound } from "lucide-react";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [ssoLoading, setSsoLoading] = useState(false);
   const [error, setError] = useState("");
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -34,6 +35,12 @@ export default function LoginPage() {
     } else {
       window.location.href = "/dashboard";
     }
+  };
+
+  const handleAuthentikLogin = async () => {
+    setSsoLoading(true);
+    setError("");
+    await signIn("authentik", { callbackUrl: "/dashboard" });
   };
 
   return (
@@ -155,6 +162,27 @@ export default function LoginPage() {
               {loading ? "Đang đăng nhập..." : "Đăng nhập"}
             </button>
           </form>
+
+          {/* Divider */}
+          <div className="flex items-center gap-4">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs text-muted font-medium">hoặc</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+
+          {/* Authentik SSO Button */}
+          <button
+            onClick={handleAuthentikLogin}
+            disabled={ssoLoading}
+            className="w-full flex items-center justify-center gap-3 px-6 py-3 border-2 border-accent text-accent hover:bg-accent hover:text-white rounded-lg font-medium transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {ssoLoading ? (
+              <Loader2 size={20} className="animate-spin" />
+            ) : (
+              <KeyRound size={20} />
+            )}
+            {ssoLoading ? "Đang chuyển đến SSO..." : "Đăng nhập với SSO (Authentik)"}
+          </button>
 
           <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-lg">
             <Shield size={20} className="text-accent mt-0.5 shrink-0" />
