@@ -38,6 +38,7 @@ interface ChatLog {
   sender: string;
   message: string;
   sentiment: string;
+  source: string;
   created_at: string;
 }
 
@@ -61,6 +62,7 @@ export default function ChatManagementPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [filterTier, setFilterTier] = useState("all");
+  const [filterSource, setFilterSource] = useState("all");
   
   // Simulator input state
   const [newMessage, setNewMessage] = useState("");
@@ -102,10 +104,11 @@ export default function ChatManagementPage() {
   }, [fetchUsersList]);
 
   // Fetch chat history for selected user
-  const fetchChatsForUser = useCallback(async (userId: string) => {
+  const fetchChatsForUser = useCallback(async (userId: string, source?: string) => {
     setLoadingChats(true);
     try {
-      const res = await fetch(`/api/chat?userId=${userId}`);
+      const sourceParam = source && source !== "all" ? `&source=${source}` : "";
+      const res = await fetch(`/api/chat?userId=${userId}${sourceParam}`);
       const data = await res.json();
       setChatLogs(data.chatLogs || []);
     } catch (err) {
@@ -118,11 +121,11 @@ export default function ChatManagementPage() {
 
   useEffect(() => {
     if (selectedUser) {
-      fetchChatsForUser(selectedUser.id);
+      fetchChatsForUser(selectedUser.id, filterSource);
     } else {
       setChatLogs([]);
     }
-  }, [selectedUser, fetchChatsForUser]);
+  }, [selectedUser, filterSource, fetchChatsForUser]);
 
   // Scroll to bottom when chats load
   useEffect(() => {
@@ -131,14 +134,15 @@ export default function ChatManagementPage() {
 
   // Filtered users matching search & dropdowns
   const filteredUsers = users.filter((u) => {
+    const term = searchTerm.toLowerCase();
     const matchesSearch =
-      u.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (u.displayName && u.displayName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      u.email.toLowerCase().includes(searchTerm.toLowerCase());
-      
+      (u.username || "").toLowerCase().includes(term) ||
+      (u.displayName || "").toLowerCase().includes(term) ||
+      (u.email || "").toLowerCase().includes(term);
+
     const matchesType = filterType === "all" || u.userType === filterType;
     const matchesTier = filterTier === "all" || u.tier === filterTier;
-    
+
     return matchesSearch && matchesType && matchesTier;
   });
 
@@ -486,7 +490,7 @@ export default function ChatManagementPage() {
             </div>
 
             {/* Quick Filters Group */}
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <select
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value)}
@@ -507,6 +511,16 @@ export default function ChatManagementPage() {
                 <option value="ultra" className="bg-[#090D16]">Ultra</option>
                 <option value="pro" className="bg-[#090D16]">Pro</option>
                 <option value="basic" className="bg-[#090D16]">Basic</option>
+              </select>
+
+              <select
+                value={filterSource}
+                onChange={(e) => setFilterSource(e.target.value)}
+                className="px-2.5 py-1.5 text-[11px] bg-black/20 border border-white/5 rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+              >
+                <option value="all" className="bg-[#090D16]">Mọi nguồn</option>
+                <option value="kids" className="bg-[#090D16]">Kids</option>
+                <option value="eldercare" className="bg-[#090D16]">Elder Care</option>
               </select>
             </div>
 

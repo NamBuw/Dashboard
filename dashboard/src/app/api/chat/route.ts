@@ -8,6 +8,7 @@ interface ChatLog {
   sender: string;
   message: string;
   sentiment: string;
+  source: string;
   created_at: string;
 }
 
@@ -23,6 +24,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
+    const source = searchParams.get("source"); // optional: 'kids' or 'eldercare'
 
     if (!userId) {
       return NextResponse.json({ error: "Missing userId parameter" }, { status: 400 });
@@ -42,13 +44,24 @@ export async function GET(request: NextRequest) {
     }
 
     // Try fetching actual conversation logs for this user from database
-    let chatLogs = await query<ChatLog>(
-      `SELECT id, user_id, sender, message, sentiment, created_at
-       FROM conversation_logs
-       WHERE user_id = $1
-       ORDER BY created_at ASC`,
-      [userId]
-    );
+    let chatLogs: ChatLog[];
+    if (source) {
+      chatLogs = await query<ChatLog>(
+        `SELECT id, user_id, sender, message, sentiment, source, created_at
+         FROM conversation_logs
+         WHERE user_id = $1 AND source = $2
+         ORDER BY created_at ASC`,
+        [userId, source]
+      );
+    } else {
+      chatLogs = await query<ChatLog>(
+        `SELECT id, user_id, sender, message, sentiment, source, created_at
+         FROM conversation_logs
+         WHERE user_id = $1
+         ORDER BY created_at ASC`,
+        [userId]
+      );
+    }
 
     // Returns actual conversation logs or empty list if none exist
     return NextResponse.json({ chatLogs });
@@ -68,7 +81,7 @@ export async function POST(request: NextRequest) {
     const isSuperUser = !!session.user.is_superuser;
     const currentUserId = session.user.id;
 
-    const { userId, sender, message, sentiment } = await request.json();
+    const { userId, sender, message, sentiment, source } = await request.json();
 
     if (!userId || !sender || !message) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -89,10 +102,10 @@ export async function POST(request: NextRequest) {
 
     // Insert new chat message into DB
     const result = await query<ChatLog>(
-      `INSERT INTO conversation_logs (user_id, sender, message, sentiment)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, user_id, sender, message, sentiment, created_at`,
-      [userId, sender, message, sentiment || "neutral"]
+      `INSERT INTO conversation_logs (user_id, sender, message, sentiment, source)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, user_id, sender, message, sentiment, source, created_at`,
+      [userId, sender, message, sentiment || "neutral", source || "kids"]
     );
 
     return NextResponse.json({ success: true, chatLog: result[0] });
