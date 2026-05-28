@@ -2,6 +2,8 @@ import NextAuth from "next-auth";
 import type { NextAuthConfig } from "next-auth";
 import { getUserRole } from "./types";
 import type { SessionUser } from "./types";
+import { query } from "./db";
+import { randomUUID } from "crypto";
 
 declare module "next-auth" {
   interface Session {
@@ -40,11 +42,51 @@ export const authConfig: NextAuthConfig = {
     strategy: "jwt",
   },
   callbacks: {
+    async signIn({ account, profile }) {
+      // JIT provisioning: ensure user exists in Dashboard DB on SSO login
+      if (account?.provider === "authentik" && profile) {
+        const authentikProfile = profile as Record<string, unknown>;
+        const authentikUserId = authentikProfile.sub as string;
+        const email = (authentikProfile.email as string) || "";
+        const name = (authentikProfile.name as string) || (authentikProfile.preferred_username as string) || email;
+        const groups = (authentikProfile.groups as string[]) ?? [];
+        const isSuperUser = groups.includes("SuperAdmin");
+
+        try {
+          // Check if user exists
+          const [existing] = await query<{ id: string }>(
+            `SELECT id FROM users WHERE authentik_user_id = $1 OR email = $2 LIMIT 1`,
+            [authentikUserId, email.toLowerCase()]
+          );
+
+          if (!existing) {
+            // Create user in Dashboard DB
+            const userId = randomUUID();
+            await query(
+              `INSERT INTO users (id, authentik_user_id, username, email, display_name, user_type, subscription_tier, is_active, is_superuser)
+               VALUES ($1, $2, $3, $4, $5, 'dashboard', 'pro', true, $6)`,
+              [userId, authentikUserId, email.split("@")[0].toLowerCase(), email.toLowerCase(), name, isSuperUser]
+            );
+          } else {
+            // Update authentik_user_id if missing
+            await query(
+              `UPDATE users SET authentik_user_id = $1, updated_at = NOW() WHERE id = $2 AND authentik_user_id IS NULL`,
+              [authentikUserId, existing.id]
+            );
+          }
+        } catch (err) {
+          console.error("JIT provisioning error:", err);
+        }
+      }
+      return true;
+    },
     async jwt({ token, user, account, profile }) {
       // Authentik OIDC login
       if (account?.provider === "authentik" && profile) {
         const authentikProfile = profile as Record<string, unknown>;
         const groups = (authentikProfile.groups as string[]) ?? [];
+        const authentikUserId = authentikProfile.sub as string;
+        const email = (authentikProfile.email as string) || "";
 
         const roles: string[] = [];
         if (groups.includes("SuperAdmin")) {
@@ -55,14 +97,26 @@ export const authConfig: NextAuthConfig = {
         if (groups.includes("Support")) roles.push("Support");
         if (groups.includes("Viewer")) roles.push("Viewer");
 
-        token.sub = authentikProfile.sub as string;
+        // Look up Dashboard DB user ID
+        try {
+          const [dbUser] = await query<{ id: string; subscription_tier: string }>(
+            `SELECT id, subscription_tier FROM users WHERE authentik_user_id = $1 OR email = $2 LIMIT 1`,
+            [authentikUserId, email.toLowerCase()]
+          );
+          if (dbUser) {
+            token.sub = dbUser.id; // Use Dashboard DB ID, not Authentik ID
+            token.subscription_tier = dbUser.subscription_tier;
+          }
+        } catch (err) {
+          console.error("User lookup error:", err);
+        }
+
         token.name = (authentikProfile.name as string) ?? (authentikProfile.preferred_username as string);
-        token.email = authentikProfile.email as string;
+        token.email = email;
         token.roles = roles;
         token.user_type = (authentikProfile.user_type as string) ?? "dashboard";
-        token.subscription_tier = "pro";
         token.accessToken = account.access_token;
-        token.authentikUserId = authentikProfile.sub as string;
+        token.authentikUserId = authentikUserId;
       }
 
       return token;
