@@ -3,39 +3,11 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
-import { LogIn, Shield, Loader2, Eye, EyeOff, KeyRound } from "lucide-react";
+import { Shield, Loader2, KeyRound } from "lucide-react";
 
 export default function LoginPage() {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [ssoLoading, setSsoLoading] = useState(false);
   const [error, setError] = useState("");
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!username || !password) {
-      setError("Vui lòng nhập đầy đủ thông tin");
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-
-    const result = await signIn("credentials", {
-      username,
-      password,
-      redirect: false,
-    });
-
-    if (result?.error) {
-      setError("Sai tên đăng nhập hoặc mật khẩu");
-      setLoading(false);
-    } else {
-      window.location.href = "/dashboard";
-    }
-  };
 
   const handleAuthentikLogin = async () => {
     setSsoLoading(true);
@@ -54,13 +26,13 @@ export default function LoginPage() {
 
         <div className="space-y-6">
           <h2 className="text-4xl font-bold leading-tight">
-            Quản lý Hệ sinh thái
+            Qu&#7843;n l&#253; H&#7879; sinh th&#225;i
             <br />
-            Sản phẩm tập trung
+            S&#7843;n ph&#7849;m t&#7853;p trung
           </h2>
           <p className="text-lg text-white/70 max-w-md">
-            Theo dõi toàn bộ PTalk Assistant, Kid Mentor, Elder Kare từ một
-            dashboard duy nhất.
+            Theo d&#245;i to&#224;n b&#7897; PTalk Assistant, Kid Mentor, Elder Kare t&#7915; m&#7897;t
+            dashboard duy nh&#7845;t.
           </p>
 
           <div className="flex gap-4 pt-4">
@@ -80,7 +52,7 @@ export default function LoginPage() {
         </p>
       </div>
 
-      {/* Right - Login Form */}
+      {/* Right - Login */}
       <div className="flex-1 flex items-center justify-center p-8 bg-background">
         <div className="w-full max-w-md space-y-8">
           <div className="lg:hidden text-center">
@@ -91,108 +63,51 @@ export default function LoginPage() {
           <div className="text-center lg:text-left">
             <h2 className="text-2xl font-bold text-foreground">Đăng nhập</h2>
             <p className="text-muted mt-2">
-              Sử dụng tài khoản PTalk để truy cập dashboard
+              Sử dụng tài khoản Authentik để truy cập dashboard
             </p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-4">
-            {error && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-                {error}
-              </div>
-            )}
-
-            <div>
-              <label htmlFor="username" className="block text-sm font-medium text-foreground mb-1.5">
-                Tên đăng nhập
-              </label>
-              <input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Nhập username"
-                autoComplete="username"
-                className="w-full px-4 py-3 border border-border rounded-lg bg-background text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
-              />
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              {error}
             </div>
-
-            <div>
-              <div className="flex justify-between items-center mb-1.5">
-                <label htmlFor="password" className="block text-sm font-medium text-foreground">
-                  Mật khẩu
-                </label>
-                <Link
-                  href="/forgot-password"
-                  className="text-xs text-accent hover:underline font-semibold"
-                >
-                  Quên mật khẩu?
-                </Link>
-              </div>
-              <div className="relative">
-                <input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Nhập mật khẩu"
-                  autoComplete="current-password"
-                  className="w-full px-4 py-3 border border-border rounded-lg bg-background text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors pr-12"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground transition-colors"
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-accent hover:bg-accent-hover text-white rounded-lg font-medium transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                <Loader2 size={20} className="animate-spin" />
-              ) : (
-                <LogIn size={20} />
-              )}
-              {loading ? "Đang đăng nhập..." : "Đăng nhập"}
-            </button>
-          </form>
-
-          {/* Divider */}
-          <div className="flex items-center gap-4">
-            <div className="flex-1 h-px bg-border" />
-            <span className="text-xs text-muted font-medium">hoặc</span>
-            <div className="flex-1 h-px bg-border" />
-          </div>
+          )}
 
           {/* Authentik SSO Button */}
           <button
             onClick={handleAuthentikLogin}
             disabled={ssoLoading}
-            className="w-full flex items-center justify-center gap-3 px-6 py-3 border-2 border-accent text-accent hover:bg-accent hover:text-white rounded-lg font-medium transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-accent hover:bg-accent-hover text-white rounded-lg font-medium transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed text-lg"
           >
             {ssoLoading ? (
-              <Loader2 size={20} className="animate-spin" />
+              <Loader2 size={24} className="animate-spin" />
             ) : (
-              <KeyRound size={20} />
+              <KeyRound size={24} />
             )}
-            {ssoLoading ? "Đang chuyển đến SSO..." : "Đăng nhập với SSO (Authentik)"}
+            {ssoLoading ? "Đang chuyển đến SSO..." : "Đăng nhập với Authentik SSO"}
           </button>
+
+          {/* Sign Up Link */}
+          <div className="text-center">
+            <p className="text-sm text-muted">
+              Chưa có tài khoản?{" "}
+              <Link
+                href="/signup"
+                className="text-accent hover:underline font-semibold"
+              >
+                Đăng ký tài khoản
+              </Link>
+            </p>
+          </div>
 
           <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-lg">
             <Shield size={20} className="text-accent mt-0.5 shrink-0" />
             <div>
               <p className="text-sm font-medium text-foreground">
-                Bảo mật JWT
+                Xác thực SSO
               </p>
               <p className="text-xs text-muted mt-1">
-                Xác thực bằng JSON Web Token. Mật khẩu được mã hoá bcrypt.
-                Chỉ admin mới có quyền truy cập đầy đủ.
+                Đăng nhập qua Authentik Identity Provider. Hỗ trợ SSO cho tất cả sản phẩm PTalk.
               </p>
             </div>
           </div>

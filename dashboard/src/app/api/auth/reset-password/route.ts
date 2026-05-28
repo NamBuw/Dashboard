@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import crypto from "crypto";
-import { execSync } from "child_process";
+import bcrypt from "bcryptjs";
+
+const AUTHENTIK_URL = process.env.AUTHENTIK_URL || "https://auth.ctslab.net";
+const AUTHENTIK_API_TOKEN = process.env.AUTHENTIK_API_TOKEN || "";
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,8 +22,8 @@ export async function POST(request: NextRequest) {
 
     // 2. Query valid token from password_reset_tokens
     const [tokenRecord] = await query<{ id: string; user_id: string }>(
-      `SELECT id, user_id 
-       FROM password_reset_tokens 
+      `SELECT id, user_id
+       FROM password_reset_tokens
        WHERE token_hash = $1 AND expires_at > NOW() AND used = false`,
       [tokenHash]
     );
@@ -32,16 +35,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Securely hash new password using Python bcrypt environment
-    // Escape single quotes for safe shell command execution
-    const escapedPassword = password.replace(/'/g, "'\\''");
-    const pythonCmd = `python3 -c "import bcrypt; print(bcrypt.hashpw(b'${escapedPassword}', bcrypt.gensalt()).decode('utf-8'))"`;
-    
+    // 3. Securely hash new password using bcryptjs
     let passwordHash = "";
     try {
-      passwordHash = execSync(pythonCmd).toString().trim();
+      passwordHash = await bcrypt.hash(password, 10);
     } catch (err) {
-      console.error("Bcrypt hashing command failed:", err);
+      console.error("Bcrypt hashing failed:", err);
       return NextResponse.json(
         { error: "Lỗi hệ thống khi mã hoá mật khẩu mới." },
         { status: 500 }
@@ -55,18 +54,46 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Update password_hash in users table
+    // 4. Update password_hash in Dashboard DB
     await query(
-      `UPDATE users 
-       SET password_hash = $1, updated_at = NOW() 
+      `UPDATE users
+       SET password_hash = $1, updated_at = NOW()
        WHERE id = $2`,
       [passwordHash, tokenRecord.user_id]
     );
 
-    // 5. Mark token as used
+    // 5. Sync password to Authentik (if user has authentik_user_id)
+    try {
+      const [user] = await query<{ authentik_user_id: string | null }>(
+        `SELECT authentik_user_id FROM users WHERE id = $1`,
+        [tokenRecord.user_id]
+      );
+
+      if (user?.authentik_user_id) {
+        const pwRes = await fetch(
+          `${AUTHENTIK_URL}/api/v3/core/users/${user.authentik_user_id}/set_password/`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${AUTHENTIK_API_TOKEN}`,
+            },
+            body: JSON.stringify({ password }),
+          }
+        );
+
+        if (!pwRes.ok) {
+          console.error("Authentik set_password failed:", pwRes.status, await pwRes.text());
+        }
+      }
+    } catch (err) {
+      console.error("Authentik password sync error (non-critical):", err);
+    }
+
+    // 6. Mark token as used
     await query(
-      `UPDATE password_reset_tokens 
-       SET used = true 
+      `UPDATE password_reset_tokens
+       SET used = true
        WHERE id = $1`,
       [tokenRecord.id]
     );

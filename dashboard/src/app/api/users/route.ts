@@ -1,6 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { auth } from "@/lib/auth";
+import bcrypt from "bcryptjs";
+import { randomUUID } from "crypto";
+
+const AUTHENTIK_URL = process.env.AUTHENTIK_URL || "https://auth.ctslab.net";
+const AUTHENTIK_API_TOKEN = process.env.AUTHENTIK_API_TOKEN || "";
+
+async function authentikFetch(path: string, options: RequestInit = {}) {
+  const res = await fetch(`${AUTHENTIK_URL}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${AUTHENTIK_API_TOKEN}`,
+      ...options.headers,
+    },
+  });
+  return res;
+}
 
 interface UserRow {
   id: string;
@@ -129,7 +146,6 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
-    // Enforce that only Admin can CRUD users
     if (!session?.user?.is_superuser) {
       return NextResponse.json({ error: "Forbidden - Admin access required" }, { status: 403 });
     }
@@ -140,34 +156,76 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    // Call FastAPI auth service to register user and securely hash password using bcrypt
-    const AUTH_API_URL = process.env.AUTH_API_URL || "https://auth.ctslab.net";
-    const registerRes = await fetch(`${AUTH_API_URL}/auth/register`, {
+    // 1. Create user in Authentik
+    const createRes = await authentikFetch("/api/v3/core/users/", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         username: username.toLowerCase().trim(),
         email: email.trim(),
-        password,
-        user_type: userType || "owner",
-        display_name: displayName || username,
+        name: displayName || username,
+        is_active: true,
       }),
     });
 
-    if (!registerRes.ok) {
-      const errData = await registerRes.json();
-      return NextResponse.json({ error: errData.detail || "Failed to register user in Auth Service" }, { status: registerRes.status });
+    if (!createRes.ok) {
+      const errBody = await createRes.text();
+      console.error("Authentik user creation failed:", createRes.status, errBody);
+      if (createRes.status === 400 && errBody.includes("already exists")) {
+        return NextResponse.json({ error: "Username hoặc email đã tồn tại" }, { status: 409 });
+      }
+      return NextResponse.json({ error: "Không thể tạo tài khoản trên Authentik" }, { status: 502 });
     }
 
-    const newUser = await registerRes.json();
+    const createData = await createRes.json();
+    const authentikUserId = createData.pk;
 
-    // If subscription tier is customized (Pro/Ultra), update it directly in DB
-    if (tier && tier !== "basic") {
-      await query(
-        `UPDATE users SET subscription_tier = $1 WHERE id = $2`,
-        [tier, newUser.id]
-      );
+    // 2. Set password in Authentik
+    const pwRes = await authentikFetch(
+      `/api/v3/core/users/${authentikUserId}/set_password/`,
+      { method: "POST", body: JSON.stringify({ password }) }
+    );
+
+    if (!pwRes.ok) {
+      console.error("Authentik set_password failed:", pwRes.status);
+      await authentikFetch(`/api/v3/core/users/${authentikUserId}/`, { method: "DELETE" }).catch(() => {});
+      return NextResponse.json({ error: "Không thể tạo tài khoản" }, { status: 502 });
     }
+
+    // 3. Assign to AccountOwner group
+    try {
+      const groupRes = await authentikFetch("/api/v3/core/groups/?name=AccountOwner");
+      if (groupRes.ok) {
+        const groupData = await groupRes.json();
+        if (groupData.results?.length > 0) {
+          await authentikFetch(`/api/v3/core/groups/${groupData.results[0].pk}/add_user/`, {
+            method: "POST",
+            body: JSON.stringify({ pk: authentikUserId }),
+          }).catch(() => {});
+        }
+      }
+    } catch (err) {
+      console.warn("Group assignment error (non-critical):", err);
+    }
+
+    // 4. Hash password and insert into Dashboard DB
+    const passwordHash = await bcrypt.hash(password, 10);
+    const userId = randomUUID();
+
+    const [newUser] = await query<{ id: string; username: string; email: string }>(
+      `INSERT INTO users (id, username, email, password_hash, display_name, user_type, authentik_user_id, subscription_tier, is_active, is_superuser)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, false)
+       RETURNING id, username, email`,
+      [
+        userId,
+        username.toLowerCase().trim(),
+        email.trim(),
+        passwordHash,
+        displayName || username,
+        userType || "account_owner",
+        authentikUserId,
+        tier || "basic",
+      ]
+    );
 
     return NextResponse.json({ success: true, user: { ...newUser, subscription_tier: tier || "basic" } });
   } catch (error) {

@@ -1,6 +1,5 @@
 import NextAuth from "next-auth";
 import type { NextAuthConfig } from "next-auth";
-import Credentials from "next-auth/providers/credentials";
 import { getUserRole } from "./types";
 import type { SessionUser } from "./types";
 
@@ -11,15 +10,14 @@ declare module "next-auth" {
   }
 }
 
-const AUTH_API_URL = process.env.AUTH_API_URL || "https://auth.ctslab.net";
-const AUTHENTIK_ISSUER = process.env.AUTHENTIK_ISSUER || "http://localhost:9090/application/o/dashboard/";
+const AUTHENTIK_ISSUER = process.env.AUTHENTIK_ISSUER || "https://auth.ctslab.net/application/o/dashboard/";
 const AUTHENTIK_CLIENT_ID = process.env.AUTHENTIK_CLIENT_ID || "dashboard-client";
 const AUTHENTIK_CLIENT_SECRET = process.env.AUTHENTIK_CLIENT_SECRET || "dashboard-secret-key";
 
 export const authConfig: NextAuthConfig = {
   debug: process.env.NODE_ENV === "development",
   providers: [
-    // --- Authentik OIDC Provider (primary SSO) ---
+    // --- Authentik OIDC Provider (single auth source) ---
     {
       id: "authentik",
       name: "Authentik",
@@ -33,71 +31,6 @@ export const authConfig: NextAuthConfig = {
         },
       },
     },
-    // --- Legacy Credentials Provider (FastAPI auth) ---
-    Credentials({
-      name: "PTalk Auth",
-      credentials: {
-        username: { label: "Username", type: "text" },
-        password: { label: "Password", type: "password" },
-      },
-      async authorize(credentials) {
-        if (!credentials?.username || !credentials?.password) {
-          return null;
-        }
-
-        try {
-          const loginRes = await fetch(`${AUTH_API_URL}/auth/login`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              username: credentials.username,
-              password: credentials.password,
-            }),
-          });
-
-          if (!loginRes.ok) {
-            return null;
-          }
-
-          const tokens = await loginRes.json();
-
-          const meRes = await fetch(`${AUTH_API_URL}/auth/me`, {
-            headers: { Authorization: `Bearer ${tokens.access_token}` },
-          });
-
-          if (!meRes.ok) {
-            return null;
-          }
-
-          const user = await meRes.json();
-
-          const roles: string[] = [];
-          if (user.is_superuser) {
-            roles.push("SuperAdmin");
-          }
-          if (user.user_type === "admin") {
-            roles.push("ProductAdmin");
-          }
-          if (user.user_type === "support") {
-            roles.push("Support");
-          }
-
-          return {
-            id: user.id,
-            name: user.display_name || user.username,
-            email: user.email,
-            roles,
-            user_type: user.user_type,
-            subscription_tier: user.subscription_tier,
-            is_superuser: user.is_superuser,
-            accessToken: tokens.access_token,
-            refreshToken: tokens.refresh_token,
-          };
-        } catch {
-          return null;
-        }
-      },
-    }),
   ],
   pages: {
     signIn: "/login",
@@ -130,18 +63,6 @@ export const authConfig: NextAuthConfig = {
         token.subscription_tier = "pro";
         token.accessToken = account.access_token;
         token.authentikUserId = authentikProfile.sub as string;
-      }
-
-      // Credentials login (legacy)
-      if (user && !account) {
-        token.sub = (user as Record<string, unknown>).id as string;
-        token.name = (user as Record<string, unknown>).name as string;
-        token.email = (user as Record<string, unknown>).email as string;
-        token.roles = (user as Record<string, unknown>).roles as string[];
-        token.user_type = (user as Record<string, unknown>).user_type as string;
-        token.subscription_tier = (user as Record<string, unknown>).subscription_tier as string;
-        token.is_superuser = (user as Record<string, unknown>).is_superuser as boolean;
-        token.accessToken = (user as Record<string, unknown>).accessToken as string;
       }
 
       return token;

@@ -8,7 +8,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## Tech Stack
 - **Framework:** Next.js 16.2.6 (Turbopack), React 19, Tailwind CSS 4
-- **Auth:** NextAuth v5 (beta 31) with Credentials provider → external Authentik OIDC
+- **Auth:** NextAuth v5 (beta 31) with Authentik OIDC (single sign-on)
 - **DB:** PostgreSQL (`ptalk_auth` via `pg` driver, raw SQL — no ORM)
 - **Language:** TypeScript, UI text in Vietnamese
 
@@ -45,9 +45,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
 ## API Routes
 | Endpoint | Methods | Purpose |
 |----------|---------|---------|
-| `/api/auth/[...nextauth]` | GET, POST | NextAuth handler |
-| `/api/auth/forgot-password` | POST | Email password reset |
-| `/api/auth/reset-password` | POST | Token-based reset |
+| `/api/auth/[...nextauth]` | GET, POST | NextAuth handler (Authentik OIDC) |
+| `/api/auth/signup` | POST | User registration (Authentik + Dashboard DB) |
+| `/api/auth/forgot-password` | POST | Password reset token generation |
+| `/api/auth/reset-password` | POST | Token-based reset (syncs to Authentik) |
 | `/api/stats` | GET | Dashboard statistics |
 | `/api/users` | GET, POST, PUT, DELETE | User CRUD |
 | `/api/devices` | GET, POST, PUT | Device management |
@@ -60,10 +61,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## Environment Variables (.env)
 ```
-AUTH_API_URL=https://auth.ctslab.net
 AUTH_SECRET=...
 AUTH_URL=https://dashboard.ctslab.net
 AUTH_TRUST_HOST=true
+AUTHENTIK_ISSUER=https://auth.ctslab.net/application/o/dashboard/
+AUTHENTIK_CLIENT_ID=dashboard-client
+AUTHENTIK_CLIENT_SECRET=dashboard-secret-key
+AUTHENTIK_API_TOKEN=...
+AUTHENTIK_URL=https://auth.ctslab.net
 NEXT_PUBLIC_API_URL=...
 DB_HOST=192.168.1.1
 DB_PORT=5434
