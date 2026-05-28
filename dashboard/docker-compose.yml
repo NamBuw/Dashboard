@@ -11,3 +11,10 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      # DB connection (override .env here if needed)
+      DB_HOST: ${DB_HOST:-192.168.1.1}
+      DB_PORT: ${DB_PORT:-5434}
+      DB_NAME: ${DB_NAME:-ptalk_auth}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-SecurePassword2024}

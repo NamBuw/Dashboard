@@ -18,7 +18,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (pathname === "/login" && isAuthenticated) {
+  if ((pathname === "/login" || pathname === "/signup") && isAuthenticated) {
     return NextResponse.redirect(new URL("/dashboard", request.nextUrl));
   }
 
