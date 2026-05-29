@@ -3,13 +3,10 @@ import { query } from "@/lib/db";
 import { verifyBearerToken } from "@/lib/api-auth";
 
 /**
- * GET /api/v1/chat/messages?session_id=xxx&page=1&limit=50
- * Get messages for a chat session.
+ * GET /api/v1/chat/messages?session_id=userId_YYYY-MM-DD&page=1&limit=50
+ * Get messages from conversation_logs for a virtual session.
  *
- * RBAC:
- * - Admin: sees all messages
- * - AccountOwner: sees messages of own sessions / owned device sessions
- * - Child/Elder: sees own messages
+ * Auth: Bearer token (Authentik JWT)
  */
 export async function GET(request: NextRequest) {
   try {
@@ -31,79 +28,67 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Verify access to this session
-    const [session] = await query<{
-      id: string;
-      user_id: string;
-      device_id: string | null;
-    }>(
-      `SELECT id, user_id, device_id FROM chat_sessions WHERE id = $1`,
-      [sessionId]
-    );
-
-    if (!session) {
-      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    // Parse session_id format: userId_YYYY-MM-DD
+    const parts = sessionId.split("_");
+    if (parts.length < 2) {
+      return NextResponse.json(
+        { error: "Invalid session_id format. Expected: userId_YYYY-MM-DD" },
+        { status: 400 }
+      );
     }
+
+    const sessionUserId = parts[0];
+    const sessionDate = parts.slice(1).join("_"); // Handle dates with underscores if any
 
     // RBAC check
     if (!user.is_superuser) {
-      const isOwner = session.user_id === user.id;
-      const ownsDevice = session.device_id
-        ? (await query<{ count: string }>(
-            `SELECT COUNT(*) as count FROM devices WHERE id = $1 AND owner_id = $2`,
-            [session.device_id, user.id]
-          ))[0]?.count !== "0"
-        : false;
+      const isOwner = sessionUserId === user.id;
       const isDependent =
         (await query<{ count: string }>(
           `SELECT COUNT(*) as count FROM user_relationships WHERE owner_id = $1 AND dependent_id = $2`,
-          [user.id, session.user_id]
+          [user.id, sessionUserId]
         ))[0]?.count !== "0";
 
-      if (!isOwner && !ownsDevice && !isDependent) {
+      if (!isOwner && !isDependent) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
     }
 
-    // Get total count
-    const [countResult] = await query<{ count: string }>(
-      `SELECT COUNT(*) as count FROM chat_messages WHERE session_id = $1`,
-      [sessionId]
-    );
-    const total = parseInt(countResult?.count || "0");
-
-    // Get messages
+    // Get messages from conversation_logs
     const messages = await query<{
       id: string;
       sender: string;
-      message_type: string;
-      content: string;
-      audio_url: string | null;
-      audio_duration: number | null;
+      message: string;
       sentiment: string | null;
-      emotion_code: string | null;
+      source: string;
       created_at: string;
     }>(
-      `SELECT id, sender, message_type, content, audio_url, audio_duration,
-              sentiment, emotion_code, created_at
-       FROM chat_messages
-       WHERE session_id = $1
+      `SELECT id, sender, message, sentiment, source, created_at
+       FROM conversation_logs
+       WHERE user_id = $1 AND DATE(created_at) = $2
        ORDER BY created_at ASC
-       LIMIT $2 OFFSET $3`,
-      [sessionId, limit, offset]
+       LIMIT $3 OFFSET $4`,
+      [sessionUserId, sessionDate, limit, offset]
     );
+
+    // Get total count
+    const [countResult] = await query<{ count: string }>(
+      `SELECT COUNT(*) as count
+       FROM conversation_logs
+       WHERE user_id = $1 AND DATE(created_at) = $2`,
+      [sessionUserId, sessionDate]
+    );
+    const total = parseInt(countResult?.count || "0");
 
     return NextResponse.json({
       sessionId,
       messages: messages.map((m) => ({
         id: m.id,
         sender: m.sender,
-        messageType: m.message_type,
-        content: m.content,
-        audioUrl: m.audio_url,
-        audioDuration: m.audio_duration,
+        messageType: "text",
+        content: m.message,
         sentiment: m.sentiment,
-        emotionCode: m.emotion_code,
+        source: m.source,
         createdAt: m.created_at,
       })),
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
@@ -119,108 +104,11 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/v1/chat/messages
- * Add a message to a chat session.
- *
- * Body: { session_id, sender, content, message_type?, audio_url?, sentiment?, emotion_code? }
- * Auth: Bearer token (Authentik JWT)
+ * Not supported for conversation_logs (data written by CloudPTalk).
  */
-export async function POST(request: NextRequest) {
-  try {
-    const user = await verifyBearerToken(request.headers.get("Authorization"));
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const body = await request.json();
-    const {
-      session_id,
-      sender,
-      content,
-      message_type,
-      audio_url,
-      sentiment,
-      emotion_code,
-    } = body;
-
-    if (!session_id || !sender || !content) {
-      return NextResponse.json(
-        { error: "Missing session_id, sender, or content" },
-        { status: 400 }
-      );
-    }
-
-    // Verify session exists and user has access
-    const [session] = await query<{
-      id: string;
-      user_id: string;
-      device_id: string | null;
-    }>(
-      `SELECT id, user_id, device_id FROM chat_sessions WHERE id = $1`,
-      [session_id]
-    );
-
-    if (!session) {
-      return NextResponse.json({ error: "Session not found" }, { status: 404 });
-    }
-
-    // RBAC check
-    if (!user.is_superuser) {
-      const isOwner = session.user_id === user.id;
-      const ownsDevice = session.device_id
-        ? (await query<{ count: string }>(
-            `SELECT COUNT(*) as count FROM devices WHERE id = $1 AND owner_id = $2`,
-            [session.device_id, user.id]
-          ))[0]?.count !== "0"
-        : false;
-      const isDependent =
-        (await query<{ count: string }>(
-          `SELECT COUNT(*) as count FROM user_relationships WHERE owner_id = $1 AND dependent_id = $2`,
-          [user.id, session.user_id]
-        ))[0]?.count !== "0";
-
-      if (!isOwner && !ownsDevice && !isDependent) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-    }
-
-    // Insert message
-    const [message] = await query<{
-      id: string;
-      created_at: string;
-    }>(
-      `INSERT INTO chat_messages (session_id, sender, message_type, content, audio_url, sentiment, emotion_code)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, created_at`,
-      [
-        session_id,
-        sender,
-        message_type || "text",
-        content,
-        audio_url || null,
-        sentiment || "neutral",
-        emotion_code || null,
-      ]
-    );
-
-    // Update session metadata
-    await query(
-      `UPDATE chat_sessions
-       SET message_count = message_count + 1,
-           last_message_at = NOW()
-       WHERE id = $1`,
-      [session_id]
-    );
-
-    return NextResponse.json({
-      success: true,
-      messageId: message.id,
-      createdAt: message.created_at,
-    });
-  } catch (error) {
-    console.error("Chat messages POST error:", error);
-    return NextResponse.json(
-      { error: "Failed to save message" },
-      { status: 500 }
-    );
-  }
+export async function POST() {
+  return NextResponse.json(
+    { error: "Use conversation_logs directly. Messages are written by CloudPTalk." },
+    { status: 405 }
+  );
 }

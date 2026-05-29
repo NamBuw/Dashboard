@@ -4,15 +4,10 @@ import { verifyBearerToken } from "@/lib/api-auth";
 
 /**
  * GET /api/v1/chat/sessions
- * List chat sessions with RBAC filtering.
+ * List chat sessions derived from conversation_logs.
  *
- * Query params: product_source, channel, device_id, page, limit
+ * Query params: product_source, page, limit
  * Auth: Bearer token (Authentik JWT)
- *
- * RBAC:
- * - Admin: sees ALL sessions
- * - AccountOwner: sees sessions of own devices + dependents
- * - Child/Elder: sees own sessions only
  */
 export async function GET(request: NextRequest) {
   try {
@@ -23,102 +18,79 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const productSource = searchParams.get("product_source");
-    const channel = searchParams.get("channel");
-    const deviceId = searchParams.get("device_id");
     const page = parseInt(searchParams.get("page") || "1");
     const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100);
     const offset = (page - 1) * limit;
 
-    // Build query based on RBAC
-    let fromClause: string;
-    let whereClause: string;
+    // Build RBAC filter
+    let userFilter: string;
     let params: unknown[];
 
     if (user.is_superuser) {
-      // Admin: sees everything
-      fromClause = `chat_sessions cs`;
-      whereClause = `WHERE 1=1`;
+      userFilter = "";
       params = [];
     } else {
-      // User: sees own sessions + sessions of owned devices
-      fromClause = `chat_sessions cs`;
-      whereClause = `WHERE (
-          cs.user_id = $1
-          OR cs.device_id IN (SELECT id FROM devices WHERE owner_id = $1)
-          OR cs.user_id IN (SELECT dependent_id FROM user_relationships WHERE owner_id = $1)
-        )`;
+      userFilter = `AND cl.user_id = $1`;
       params = [user.id];
     }
 
-    // Apply filters
-    let paramIndex = params.length + 1;
-    let filterClauses = "";
+    // Source filter
+    let sourceFilter = "";
+    if (productSource === "kid_mentor") {
+      sourceFilter = `AND cl.source = 'kids'`;
+    } else if (productSource === "ptalk") {
+      sourceFilter = `AND cl.source = 'ptalk'`;
+    }
 
-    if (productSource) {
-      filterClauses += ` AND cs.product_source = $${paramIndex}`;
-      params.push(productSource);
-      paramIndex++;
-    }
-    if (channel) {
-      filterClauses += ` AND cs.channel = $${paramIndex}`;
-      params.push(channel);
-      paramIndex++;
-    }
-    if (deviceId) {
-      filterClauses += ` AND cs.device_id = $${paramIndex}`;
-      params.push(deviceId);
-      paramIndex++;
-    }
+    // Get virtual sessions: group by user + date
+    const sessions = await query<{
+      session_id: string;
+      user_id: string;
+      user_name: string;
+      source: string;
+      message_count: string;
+      first_message: string;
+      last_message: string;
+      preview: string;
+    }>(
+      `SELECT
+        CONCAT(cl.user_id, '_', DATE(cl.created_at)) as session_id,
+        cl.user_id,
+        u.display_name as user_name,
+        cl.source,
+        COUNT(*) as message_count,
+        MIN(cl.created_at) as first_message,
+        MAX(cl.created_at) as last_message,
+        (SELECT message FROM conversation_logs WHERE user_id = cl.user_id AND DATE(created_at) = DATE(cl.created_at) ORDER BY created_at DESC LIMIT 1) as preview
+       FROM conversation_logs cl
+       LEFT JOIN users u ON cl.user_id = u.id
+       WHERE 1=1 ${userFilter} ${sourceFilter}
+       GROUP BY cl.user_id, DATE(cl.created_at), u.display_name, cl.source
+       ORDER BY last_message DESC
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, limit, offset]
+    );
 
     // Get total count
     const [countResult] = await query<{ count: string }>(
-      `SELECT COUNT(*) as count FROM ${fromClause} ${whereClause}${filterClauses}`,
+      `SELECT COUNT(DISTINCT CONCAT(user_id, '_', DATE(created_at))) as count
+       FROM conversation_logs cl
+       WHERE 1=1 ${userFilter} ${sourceFilter}`,
       params
     );
     const total = parseInt(countResult?.count || "0", 10);
 
-    // Get sessions
-    const sessions = await query<{
-      id: string;
-      user_id: string;
-      device_id: string | null;
-      product_source: string;
-      channel: string;
-      title: string | null;
-      message_count: number;
-      avg_sentiment: string | null;
-      started_at: string;
-      last_message_at: string | null;
-      user_name: string | null;
-      device_label: string | null;
-    }>(
-      `SELECT cs.*,
-        u.display_name as user_name,
-        d.label as device_label
-       FROM ${fromClause}
-       LEFT JOIN users u ON cs.user_id = u.id
-       LEFT JOIN devices d ON cs.device_id = d.id
-       ${whereClause}
-       ${filterClauses}
-       ORDER BY cs.last_message_at DESC NULLS LAST, cs.started_at DESC
-       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
-      [...params, limit, offset]
-    );
-
     return NextResponse.json({
       sessions: sessions.map((s) => ({
-        id: s.id,
+        id: s.session_id,
         userId: s.user_id,
-        deviceId: s.device_id,
-        productSource: s.product_source,
-        channel: s.channel,
-        title: s.title,
-        messageCount: s.message_count,
-        avgSentiment: s.avg_sentiment,
-        startedAt: s.started_at,
-        lastMessageAt: s.last_message_at,
         userName: s.user_name,
-        deviceLabel: s.device_label,
+        productSource: productSource || "all",
+        channel: "voice",
+        messageCount: parseInt(s.message_count),
+        startedAt: s.first_message,
+        lastMessageAt: s.last_message,
+        preview: s.preview,
       })),
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
@@ -133,62 +105,11 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/v1/chat/sessions
- * Create a new chat session.
- *
- * Body: { user_id?, device_id?, product_source, channel, title? }
- * Auth: Bearer token (Authentik JWT)
+ * Not supported for conversation_logs (data written by CloudPTalk).
  */
-export async function POST(request: NextRequest) {
-  try {
-    const user = await verifyBearerToken(request.headers.get("Authorization"));
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const body = await request.json();
-    const { user_id, device_id, product_source, channel, title } = body;
-
-    if (!product_source || !channel) {
-      return NextResponse.json(
-        { error: "Missing product_source or channel" },
-        { status: 400 }
-      );
-    }
-
-    // Use authenticated user if no user_id specified
-    const sessionUserId = user_id || user.id;
-
-    // RBAC: non-admin can only create sessions for themselves or their dependents
-    if (!user.is_superuser && sessionUserId !== user.id) {
-      const [assoc] = await query<{ count: string }>(
-        `SELECT COUNT(*) as count FROM user_relationships WHERE owner_id = $1 AND dependent_id = $2`,
-        [user.id, sessionUserId]
-      );
-      if (parseInt(assoc?.count || "0") === 0) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-    }
-
-    const [session] = await query<{
-      id: string;
-      started_at: string;
-    }>(
-      `INSERT INTO chat_sessions (user_id, device_id, product_source, channel, title, started_at)
-       VALUES ($1, $2, $3, $4, $5, NOW())
-       RETURNING id, started_at`,
-      [sessionUserId, device_id || null, product_source, channel, title || null]
-    );
-
-    return NextResponse.json({
-      success: true,
-      sessionId: session.id,
-      startedAt: session.started_at,
-    });
-  } catch (error) {
-    console.error("Chat sessions POST error:", error);
-    return NextResponse.json(
-      { error: "Failed to create chat session" },
-      { status: 500 }
-    );
-  }
+export async function POST() {
+  return NextResponse.json(
+    { error: "Use conversation_logs directly. Sessions are auto-created." },
+    { status: 405 }
+  );
 }
