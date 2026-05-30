@@ -52,7 +52,7 @@ export default function ForgotPasswordPage() {
       <div className="hidden lg:flex lg:w-1/2 bg-sidebar-bg text-white flex-col justify-between p-12">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">CTS Dashboard</h1>
-          <p className="text-sm text-white/60 mt-1">YIRLODT Laboratory - PTIT</p>
+          <p className="text-sm text-white/60 mt-1">CTS Lab - PTIT</p>
         </div>
 
         <div className="space-y-6">
@@ -78,7 +78,7 @@ export default function ForgotPasswordPage() {
         </div>
 
         <p className="text-xs text-white/40">
-          &copy; 2026 YIRLODT Laboratory. All rights reserved.
+          &copy; 2026 CTS Lab. All rights reserved.
         </p>
       </div>
 
@@ -87,7 +87,7 @@ export default function ForgotPasswordPage() {
         <div className="w-full max-w-md space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
           <div className="lg:hidden text-center">
             <h1 className="text-2xl font-bold text-foreground">CTS Dashboard</h1>
-            <p className="text-sm text-muted mt-1">YIRLODT Laboratory - PTIT</p>
+            <p className="text-sm text-muted mt-1">CTS Lab - PTIT</p>
           </div>
 
           <div className="text-center lg:text-left">

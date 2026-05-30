@@ -6,7 +6,7 @@ metadata:
     blueprints.goauthentik.io/instantiated-by: ptalk-system
 
 entries:
-  # 1. Groups for End Users
+  # 0. Groups for End Users (must be created before being referenced)
   - model: authentik_core.group
     id: group-account-owner
     state: present
@@ -14,7 +14,7 @@ entries:
       name: AccountOwner
     attrs:
       is_superuser: false
-  
+
   - model: authentik_core.group
     id: group-child
     state: present
@@ -31,7 +31,7 @@ entries:
     attrs:
       is_superuser: false
 
-  # 2. Groups for Dashboard / Operations
+  # 1. Groups for Dashboard / Operations
   - model: authentik_core.group
     id: role-super-admin
     state: present
@@ -63,6 +63,131 @@ entries:
       name: Viewer
     attrs:
       is_superuser: false
+
+  # 2. Enrollment Flow (Sign Up)
+  - model: authentik_flows.flow
+    id: flow-enrollment
+    state: present
+    identifiers:
+      slug: default-enrollment-flow
+    attrs:
+      name: Default Enrollment Flow
+      title: Create an Account
+      designation: enrollment
+      authentication: none
+
+  # Prompt fields for enrollment
+  - model: authentik_stages_prompt.prompt
+    id: prompt-username
+    state: present
+    identifiers:
+      name: field-username
+    attrs:
+      field_key: username
+      label: Username
+      type: text
+      placeholder: Enter your username
+      required: true
+      order: 0
+
+  - model: authentik_stages_prompt.prompt
+    id: prompt-email
+    state: present
+    identifiers:
+      name: field-email
+    attrs:
+      field_key: email
+      label: Email
+      type: email
+      placeholder: Enter your email
+      required: true
+      order: 1
+
+  - model: authentik_stages_prompt.prompt
+    id: prompt-password
+    state: present
+    identifiers:
+      name: field-password-enrollment
+    attrs:
+      field_key: password
+      label: Password
+      type: password
+      placeholder: Create a password
+      required: true
+      order: 2
+
+  - model: authentik_stages_prompt.prompt
+    id: prompt-password-repeat
+    state: present
+    identifiers:
+      name: field-password-repeat
+    attrs:
+      field_key: password_repeat
+      label: Confirm Password
+      type: password
+      placeholder: Repeat your password
+      required: true
+      order: 3
+
+  # Prompt stage for enrollment
+  - model: authentik_stages_prompt.promptstage
+    id: stage-enrollment-prompt
+    state: present
+    identifiers:
+      name: stage-enrollment-prompt
+    attrs:
+      fields:
+        - !KeyOf prompt-username
+        - !KeyOf prompt-email
+        - !KeyOf prompt-password
+        - !KeyOf prompt-password-repeat
+
+  # User write stage
+  - model: authentik_stages_user_write.userwritestage
+    id: stage-user-write
+    state: present
+    identifiers:
+      name: stage-user-write-enrollment
+    attrs:
+      user_creation_mode: always_create
+      create_users_group: !KeyOf group-account-owner
+
+  # User login stage
+  - model: authentik_stages_user_login.userloginstage
+    id: stage-user-login-enrollment
+    state: present
+    identifiers:
+      name: stage-user-login-enrollment
+    attrs:
+      session_duration: hours=24
+
+  # Enrollment flow stage bindings
+  - model: authentik_flows.flowstagebinding
+    id: binding-enrollment-prompt
+    state: present
+    identifiers:
+      target: !KeyOf flow-enrollment
+      stage: !KeyOf stage-enrollment-prompt
+    attrs:
+      order: 10
+
+  - model: authentik_flows.flowstagebinding
+    id: binding-enrollment-user-write
+    state: present
+    identifiers:
+      target: !KeyOf flow-enrollment
+      stage: !KeyOf stage-user-write
+    attrs:
+      order: 20
+
+  - model: authentik_flows.flowstagebinding
+    id: binding-enrollment-user-login
+    state: present
+    identifiers:
+      target: !KeyOf flow-enrollment
+      stage: !KeyOf stage-user-login-enrollment
+    attrs:
+      order: 30
 
   # 3. Property Map to embed Roles into JWT Claims
   - model: authentik_providers_oauth2.scopemapping
@@ -115,6 +240,7 @@ entries:
       client_id: kid-mentor-client
       client_secret: kid-mentor-secret-key
       authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      enrollment_flow: !KeyOf flow-enrollment
       property_mappings:
         - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
         - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
@@ -144,6 +270,7 @@ entries:
       client_id: p-assistant-client
       client_secret: p-assistant-secret-key
       authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      enrollment_flow: !KeyOf flow-enrollment
       property_mappings:
         - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
         - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
@@ -173,6 +300,7 @@ entries:
       client_id: dashboard-client
       client_secret: dashboard-secret-key
       authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      enrollment_flow: !KeyOf flow-enrollment
       property_mappings:
         - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
         - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]

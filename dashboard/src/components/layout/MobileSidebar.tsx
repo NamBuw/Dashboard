@@ -89,7 +89,10 @@ export default function MobileSidebar({ open, onClose }: MobileSidebarProps) {
         </nav>
 
         <div className="p-4 border-t border-white/10">
-          <p className="text-xs text-sidebar-text/60">YIRLODT Lab - PTIT</p>
+          <div className="flex items-center gap-2">
+            <img src="/ptit-logo.png" alt="PTIT" className="h-6 w-auto" />
+            <img src="/cts-logo.png" alt="CTS Lab" className="h-6 w-auto" />
+          </div>
         </div>
       </aside>
     </div>
