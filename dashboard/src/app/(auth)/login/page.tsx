@@ -30,14 +30,13 @@ export default function LoginPage() {
         <div className="absolute inset-0 bg-gradient-to-br from-indigo-600/20 via-purple-600/10 to-transparent" />
 
         <div className="relative z-10">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-gradient-primary flex items-center justify-center shadow-lg glow-indigo">
-              <span className="text-white font-bold text-lg">C</span>
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gradient-primary">CTS Dashboard</h1>
-              <p className="text-xs text-white/40">CTS Lab - PTIT</p>
-            </div>
+          <div className="flex items-center gap-4 mb-4">
+            <img src="/ptit-logo.png" alt="PTIT" className="h-14 w-auto" />
+            <img src="/cts-logo.png" alt="CTS Lab" className="h-14 w-auto" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gradient-primary">CTS Dashboard</h1>
+            <p className="text-sm text-white/40 mt-1">Hệ thống quản lý PTalk Ecosystem</p>
           </div>
         </div>
 

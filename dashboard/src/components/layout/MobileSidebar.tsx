@@ -109,10 +109,9 @@ export default function MobileSidebar({ open, onClose }: MobileSidebarProps) {
 
         {/* Footer */}
         <div className="p-4 border-t border-white/5">
-          <div className="flex items-center justify-center gap-3 opacity-60 hover:opacity-100 transition-opacity duration-200">
-            <img src="/ptit-logo.png" alt="PTIT" className="h-7 w-auto" />
-            <div className="w-px h-4 bg-white/10" />
-            <img src="/cts-logo.png" alt="CTS Lab" className="h-7 w-auto" />
+          <div className="flex items-center justify-between px-2">
+            <img src="/ptit-logo.png" alt="PTIT" className="h-10 w-auto" />
+            <img src="/cts-logo.png" alt="CTS Lab" className="h-10 w-auto" />
           </div>
         </div>
       </aside>
