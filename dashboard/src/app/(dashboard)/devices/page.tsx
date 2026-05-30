@@ -66,8 +66,10 @@ export default function DevicesPage() {
 
   // Filter logic
   const filteredDevices = devices.filter((device) => {
-    const matchesSearch = device.serialNumber.toLowerCase().includes(search.toLowerCase()) || 
-                          device.ownerName.toLowerCase().includes(search.toLowerCase());
+    const serial = (device.serialNumber || "").toLowerCase();
+    const owner = (device.ownerName || "").toLowerCase();
+    const matchesSearch = serial.includes(search.toLowerCase()) ||
+                          owner.includes(search.toLowerCase());
     const matchesStatus = filterStatus === "all" || device.status === filterStatus;
     return matchesSearch && matchesStatus;
   });
