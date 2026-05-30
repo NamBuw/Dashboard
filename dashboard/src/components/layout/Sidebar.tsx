@@ -7,9 +7,9 @@ import {
   Users,
   Monitor,
   Settings,
+  MessageSquare,
   ChevronLeft,
   ChevronRight,
-  MessageSquare,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { useState } from "react";
@@ -20,7 +20,7 @@ const navItems = [
   { label: "Quản lý User", href: "/users", icon: Users },
   { label: "Lịch sử Chat", href: "/chats", icon: MessageSquare },
   { label: "Thiết bị PTalk", href: "/devices", icon: Monitor },
-  { label: "Cài đặt & Monitor", href: "/settings", icon: Settings },
+  { label: "Cài đặt", href: "/settings", icon: Settings },
 ];
 
 export default function Sidebar() {
@@ -40,52 +40,35 @@ export default function Sidebar() {
   return (
     <aside
       className={clsx(
-        "hidden lg:flex flex-col border-r border-white/5 transition-all duration-300 ease-in-out",
-        collapsed ? "w-[72px]" : "w-64"
+        "hidden lg:flex flex-col h-screen sticky top-0 border-r border-border transition-all duration-200",
+        collapsed ? "w-[60px]" : "w-[240px]"
       )}
-      style={{ background: "rgba(8, 12, 22, 0.95)" }}
     >
-      {/* Logo Header */}
-      <div
-        className={clsx(
-          "flex flex-col border-b border-white/5",
-          collapsed ? "items-center py-3 px-2" : "px-4 pt-4 pb-3"
-        )}
-      >
+      {/* Header — Logo */}
+      <div className={clsx(
+        "flex items-center h-[52px] shrink-0",
+        collapsed ? "justify-center px-2" : "px-4"
+      )}>
         {!collapsed ? (
-          <div className="w-full space-y-3">
-            <a href="https://ptit.edu.vn/" target="_blank" rel="noopener noreferrer" className="block hover:opacity-80 transition-opacity">
-              <img src="/ptit-logo.png" alt="PTIT" className="h-12 w-auto" />
+          <div className="flex items-center gap-2.5">
+            <a href="https://ptit.edu.vn/" target="_blank" rel="noopener noreferrer" className="shrink-0">
+              <img src="/ptit-logo.png" alt="PTIT" className="h-8 w-auto opacity-80 hover:opacity-100 transition-opacity" />
             </a>
-            <a href="https://ctslab.net/" target="_blank" rel="noopener noreferrer" className="block hover:opacity-80 transition-opacity">
-              <img src="/cts-logo.png" alt="CTS Lab" className="h-10 w-auto" />
+            <div className="w-px h-4 bg-border" />
+            <a href="https://ctslab.net/" target="_blank" rel="noopener noreferrer" className="shrink-0">
+              <img src="/cts-logo.png" alt="CTS Lab" className="h-7 w-auto opacity-80 hover:opacity-100 transition-opacity" />
             </a>
           </div>
         ) : (
-          <div className="space-y-2">
-            <a href="https://ptit.edu.vn/" target="_blank" rel="noopener noreferrer" className="block hover:opacity-80 transition-opacity">
-              <img src="/ptit-logo.png" alt="PTIT" className="h-8 w-auto mx-auto" />
-            </a>
-            <a href="https://ctslab.net/" target="_blank" rel="noopener noreferrer" className="block hover:opacity-80 transition-opacity">
-              <img src="/cts-logo.png" alt="CTS" className="h-7 w-auto mx-auto" />
-            </a>
-          </div>
+          <a href="https://ctslab.net/" target="_blank" rel="noopener noreferrer">
+            <img src="/cts-logo.png" alt="CTS" className="h-6 w-auto opacity-60 hover:opacity-100 transition-opacity" />
+          </a>
         )}
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="p-1.5 rounded-lg hover:bg-white/5 transition-all duration-200 hover:scale-105"
-        >
-          {collapsed ? (
-            <ChevronRight size={18} className="text-muted" />
-          ) : (
-            <ChevronLeft size={18} className="text-muted" />
-          )}
-        </button>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 py-4 space-y-1 px-3">
-        {filteredItems.map((item, index) => {
+      <nav className="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto">
+        {filteredItems.map((item) => {
           const Icon = item.icon;
           const isActive =
             pathname === item.href || pathname.startsWith(item.href + "/");
@@ -94,36 +77,33 @@ export default function Sidebar() {
               key={item.href}
               href={item.href}
               className={clsx(
-                "group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 text-sm opacity-0 animate-fade-in-left",
+                "flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[13px] font-medium transition-colors",
+                collapsed && "justify-center px-0",
                 isActive
-                  ? "bg-gradient-primary text-white font-semibold shadow-lg glow-indigo"
-                  : "text-sidebar-text hover:bg-white/5 hover:text-foreground hover:translate-x-1"
+                  ? "bg-surface text-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-surface/50"
               )}
-              style={{ animationDelay: `${0.1 + index * 0.05}s` }}
               title={collapsed ? item.label : undefined}
             >
-              <Icon
-                size={20}
-                className={clsx(
-                  "shrink-0 transition-transform duration-200",
-                  isActive ? "text-white" : "text-muted group-hover:text-foreground",
-                  !collapsed && "group-hover:scale-110"
-                )}
-              />
+              <Icon size={16} className="shrink-0" strokeWidth={1.8} />
               {!collapsed && <span>{item.label}</span>}
-              {isActive && !collapsed && (
-                <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white animate-dot-pulse" />
-              )}
             </Link>
           );
         })}
       </nav>
 
-      {/* Footer */}
-      <div className="p-4 border-t border-white/5">
-        {!collapsed && (
-          <p className="text-[10px] text-white/20 text-center">Powered by CTS Lab</p>
-        )}
+      {/* Collapse toggle */}
+      <div className="px-2 py-2 border-t border-border">
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className={clsx(
+            "flex items-center gap-2 px-2.5 py-1.5 rounded-md text-[13px] font-medium text-muted-foreground hover:text-foreground hover:bg-surface/50 transition-colors w-full",
+            collapsed && "justify-center px-0"
+          )}
+        >
+          {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+          {!collapsed && <span>Thu gọn</span>}
+        </button>
       </div>
     </aside>
   );

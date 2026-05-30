@@ -29,66 +29,63 @@ export default function Header({ onMenuClick, user }: HeaderProps) {
   }, []);
 
   return (
-    <header className="glass-header h-16 flex items-center justify-between px-4 lg:px-6 shrink-0">
+    <header className="h-[52px] border-b border-border flex items-center justify-between px-4 lg:px-6 shrink-0">
       <div className="flex items-center gap-3">
         <button
           onClick={onMenuClick}
-          className="lg:hidden p-2 rounded-lg hover:bg-white/5 transition-all duration-200 hover:scale-105"
+          className="lg:hidden p-1.5 rounded-md hover:bg-surface text-muted-foreground hover:text-foreground transition-colors"
         >
-          <Menu size={20} className="text-muted" />
+          <Menu size={18} />
         </button>
-        <h1 className="text-lg font-semibold text-foreground lg:hidden text-gradient-primary">
+        <h1 className="text-sm font-semibold text-foreground lg:hidden">
           CTS Dashboard
         </h1>
       </div>
 
-      <div className="flex items-center gap-2">
-        {/* Notification Bell */}
-        <button className="relative p-2.5 rounded-xl hover:bg-white/5 transition-all duration-200 hover:scale-105 group">
-          <Bell size={20} className="text-muted group-hover:text-foreground transition-colors" />
-          <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-danger rounded-full animate-dot-pulse border-2 border-background" />
+      <div className="flex items-center gap-1">
+        {/* Notification */}
+        <button className="relative p-1.5 rounded-md hover:bg-surface text-muted-foreground hover:text-foreground transition-colors">
+          <Bell size={16} />
+          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-danger rounded-full" />
         </button>
 
         {/* User Menu */}
         <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setShowDropdown(!showDropdown)}
-            className="flex items-center gap-2.5 p-1.5 pr-3 rounded-xl hover:bg-white/5 transition-all duration-200 group"
+            className="flex items-center gap-2 p-1.5 rounded-md hover:bg-surface transition-colors"
           >
-            <div className="w-9 h-9 rounded-xl bg-gradient-primary flex items-center justify-center shadow-lg glow-indigo">
-              <User size={16} className="text-white" />
+            <div className="w-6 h-6 rounded-full bg-surface flex items-center justify-center">
+              <User size={12} className="text-muted-foreground" />
             </div>
             <div className="hidden sm:block text-left">
-              <p className="text-sm font-semibold text-foreground leading-tight">
+              <p className="text-[13px] font-medium text-foreground leading-tight">
                 {user?.name ?? "Admin"}
               </p>
-              <p className="text-xs text-muted">{user?.role ?? "SuperAdmin"}</p>
             </div>
             <ChevronDown
-              size={14}
+              size={12}
               className={clsx(
-                "hidden sm:block text-muted transition-transform duration-200",
+                "hidden sm:block text-muted-foreground transition-transform duration-150",
                 showDropdown && "rotate-180"
               )}
             />
           </button>
 
           {showDropdown && (
-            <div className="glass-dropdown absolute right-0 top-full mt-2 w-56 rounded-xl overflow-hidden animate-scale-in z-50">
-              <div className="px-4 py-3 border-b border-white/5">
-                <p className="text-sm font-semibold text-foreground">{user?.name ?? "Admin"}</p>
-                <p className="text-xs text-muted mt-0.5">
+            <div className="absolute right-0 top-full mt-1 w-52 rounded-lg bg-card border border-border shadow-lg py-1 z-50 animate-fade-in">
+              <div className="px-3 py-2 border-b border-border">
+                <p className="text-[13px] font-medium text-foreground">{user?.name ?? "Admin"}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
                   {user?.email ?? "admin@ctslab.net"}
                 </p>
               </div>
               <button
-                onClick={() => {
-                  signOut({ callbackUrl: "/login" });
-                }}
-                className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-danger hover:bg-white/5 transition-all duration-200"
+                onClick={() => signOut({ callbackUrl: "/login" })}
+                className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-danger hover:bg-danger-muted transition-colors"
               >
-                <LogOut size={16} />
-                <span className="font-medium">Đăng xuất</span>
+                <LogOut size={14} />
+                <span>Đăng xuất</span>
               </button>
             </div>
           )}

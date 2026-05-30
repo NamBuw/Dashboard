@@ -8,7 +8,6 @@ interface StatCardProps {
   changeType?: "positive" | "negative" | "neutral";
   icon: LucideIcon;
   iconColor?: string;
-  delay?: number;
 }
 
 export default function StatCard({
@@ -17,51 +16,29 @@ export default function StatCard({
   change,
   changeType = "neutral",
   icon: Icon,
-  iconColor = "bg-gradient-primary",
-  delay = 0,
+  iconColor = "text-accent",
 }: StatCardProps) {
   return (
-    <div
-      className={clsx(
-        "glass-card-hover rounded-2xl p-5 opacity-0 animate-fade-in-up",
-        delay <= 0.4 && `stagger-${Math.floor(delay / 0.05) + 1}`
-      )}
-      style={{ animationDelay: `${delay}s` }}
-    >
+    <div className="card p-4">
       <div className="flex items-start justify-between">
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-muted uppercase tracking-wider">{title}</p>
-          <p className="text-3xl font-bold text-foreground font-mono">{value}</p>
+        <div className="space-y-1">
+          <p className="text-[12px] text-muted-foreground font-medium">{title}</p>
+          <p className="text-[24px] font-semibold text-foreground tracking-tight">{value}</p>
           {change && (
             <p
               className={clsx(
-                "text-xs font-semibold flex items-center gap-1",
+                "text-[12px]",
                 changeType === "positive" && "text-success",
                 changeType === "negative" && "text-danger",
-                changeType === "neutral" && "text-muted"
+                changeType === "neutral" && "text-muted-foreground"
               )}
             >
-              {changeType === "positive" && (
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                </svg>
-              )}
-              {changeType === "negative" && (
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                </svg>
-              )}
               {change}
             </p>
           )}
         </div>
-        <div
-          className={clsx(
-            "p-3 rounded-xl text-white shadow-lg",
-            iconColor
-          )}
-        >
-          <Icon size={20} />
+        <div className={clsx("p-2 rounded-lg", iconColor)}>
+          <Icon size={16} strokeWidth={1.8} />
         </div>
       </div>
     </div>
