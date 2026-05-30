@@ -22,8 +22,6 @@ const navItems = [
   { label: "Quản lý User", href: "/users", icon: Users },
   { label: "Lịch sử Chat", href: "/chats", icon: MessageSquare },
   { label: "Thiết bị PTalk", href: "/devices", icon: Monitor },
-  { label: "Robot Assistant", href: "/products/ptalk", icon: LayoutDashboard },
-  { label: "Kid Mentor (Học tập)", href: "/products/kidmentor", icon: BarChart3 },
   { label: "Cài đặt & Monitor", href: "/settings", icon: Settings },
 ];
 
