@@ -56,19 +56,23 @@ export default function MobileSidebar({ open, onClose }: MobileSidebarProps) {
         style={{ background: "rgba(8, 12, 22, 0.98)", animationDuration: "0.3s" }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between h-16 px-4 border-b border-white/5">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center shadow-lg glow-indigo">
-              <span className="text-white font-bold text-sm">C</span>
+        <div className="px-4 pt-4 pb-3 border-b border-white/5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="space-y-1">
+              <a href="https://ptit.edu.vn/" target="_blank" rel="noopener noreferrer" className="block hover:opacity-80 transition-opacity">
+                <img src="/ptit-logo.png" alt="PTIT" className="h-10 w-auto" />
+              </a>
+              <a href="https://ctslab.net/" target="_blank" rel="noopener noreferrer" className="block hover:opacity-80 transition-opacity">
+                <img src="/cts-logo.png" alt="CTS Lab" className="h-8 w-auto" />
+              </a>
             </div>
-            <span className="text-lg font-bold text-gradient-primary">CTS Dashboard</span>
+            <button
+              onClick={onClose}
+              className="p-2 rounded-lg hover:bg-white/5 transition-all duration-200 hover:scale-105"
+            >
+              <X size={18} className="text-muted" />
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-white/5 transition-all duration-200 hover:scale-105"
-          >
-            <X size={18} className="text-muted" />
-          </button>
         </div>
 
         {/* Navigation */}
@@ -109,10 +113,7 @@ export default function MobileSidebar({ open, onClose }: MobileSidebarProps) {
 
         {/* Footer */}
         <div className="p-4 border-t border-white/5">
-          <div className="flex items-center justify-between px-2">
-            <img src="/ptit-logo.png" alt="PTIT" className="h-10 w-auto" />
-            <img src="/cts-logo.png" alt="CTS Lab" className="h-10 w-auto" />
-          </div>
+          <p className="text-[10px] text-white/20 text-center">Powered by CTS Lab</p>
         </div>
       </aside>
     </div>

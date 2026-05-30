@@ -48,16 +48,27 @@ export default function Sidebar() {
       {/* Logo Header */}
       <div
         className={clsx(
-          "flex items-center h-16 px-4 border-b border-white/5",
-          collapsed ? "justify-center" : "justify-between"
+          "flex flex-col border-b border-white/5",
+          collapsed ? "items-center py-3 px-2" : "px-4 pt-4 pb-3"
         )}
       >
-        {!collapsed && (
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center shadow-lg glow-indigo">
-              <span className="text-white font-bold text-sm">C</span>
-            </div>
-            <span className="text-lg font-bold text-gradient-primary">CTS Dashboard</span>
+        {!collapsed ? (
+          <div className="w-full space-y-3">
+            <a href="https://ptit.edu.vn/" target="_blank" rel="noopener noreferrer" className="block hover:opacity-80 transition-opacity">
+              <img src="/ptit-logo.png" alt="PTIT" className="h-12 w-auto" />
+            </a>
+            <a href="https://ctslab.net/" target="_blank" rel="noopener noreferrer" className="block hover:opacity-80 transition-opacity">
+              <img src="/cts-logo.png" alt="CTS Lab" className="h-10 w-auto" />
+            </a>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <a href="https://ptit.edu.vn/" target="_blank" rel="noopener noreferrer" className="block hover:opacity-80 transition-opacity">
+              <img src="/ptit-logo.png" alt="PTIT" className="h-8 w-auto mx-auto" />
+            </a>
+            <a href="https://ctslab.net/" target="_blank" rel="noopener noreferrer" className="block hover:opacity-80 transition-opacity">
+              <img src="/cts-logo.png" alt="CTS" className="h-7 w-auto mx-auto" />
+            </a>
           </div>
         )}
         <button
@@ -108,17 +119,10 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Footer Logos */}
+      {/* Footer */}
       <div className="p-4 border-t border-white/5">
-        {!collapsed ? (
-          <div className="flex items-center justify-between px-2">
-            <img src="/ptit-logo.png" alt="PTIT" className="h-10 w-auto" />
-            <img src="/cts-logo.png" alt="CTS Lab" className="h-10 w-auto" />
-          </div>
-        ) : (
-          <div className="flex justify-center">
-            <img src="/cts-logo.png" alt="CTS" className="h-8 w-auto" />
-          </div>
+        {!collapsed && (
+          <p className="text-[10px] text-white/20 text-center">Powered by CTS Lab</p>
         )}
       </div>
     </aside>
