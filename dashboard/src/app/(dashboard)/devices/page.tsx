@@ -12,6 +12,10 @@ import {
   Plus,
   X,
   Radio,
+  Trash2,
+  ArrowRightLeft,
+  RotateCcw,
+  UserPlus,
 } from "lucide-react";
 import { clsx } from "clsx";
 
@@ -26,6 +30,11 @@ interface Device {
   lastSeen: string;
 }
 
+interface ActionModalState {
+  type: "forget" | "transfer" | "factory-reset" | null;
+  device: Device | null;
+}
+
 export default function DevicesPage() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,6 +46,11 @@ export default function DevicesPage() {
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [assigneeName, setAssigneeName] = useState("");
+
+  // Action modal state
+  const [actionModal, setActionModal] = useState<ActionModalState>({ type: null, device: null });
+  const [transferTargetId, setTransferTargetId] = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
 
   // OTA state simulation
   const [updatingDeviceId, setUpdatingDeviceId] = useState<string | null>(null);
@@ -102,20 +116,42 @@ export default function DevicesPage() {
     }
   };
 
-  // Delete device
-  const handleDeleteDevice = async (device: Device) => {
-    if (!confirm(`Xoá thiết bị "${device.serialNumber || device.id}"?\nToàn bộ lịch sử trò chuyện sẽ bị xoá.`)) return;
+  // Device action handler (forget / transfer / factory-reset)
+  const handleDeviceAction = async () => {
+    if (!actionModal.device || !actionModal.type) return;
 
+    setActionLoading(true);
     try {
-      const res = await fetch(`/api/devices?id=${device.id}`, { method: "DELETE" });
+      const body: Record<string, string> = {
+        action: actionModal.type,
+        deviceId: actionModal.device.id,
+      };
+      if (actionModal.type === "transfer") {
+        if (!transferTargetId.trim()) {
+          alert("Vui lòng nhập ID người nhận chuyển nhượng.");
+          setActionLoading(false);
+          return;
+        }
+        body.newOwnerId = transferTargetId.trim();
+      }
+
+      const res = await fetch("/api/devices/actions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
       const data = await res.json();
       if (res.ok) {
+        setActionModal({ type: null, device: null });
+        setTransferTargetId("");
         fetchDevices();
       } else {
         alert(`Lỗi: ${data.error}`);
       }
     } catch {
       alert("Không kết nối được server");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -307,7 +343,7 @@ export default function DevicesPage() {
                     </td>
                     {/* OTA firmware trigger / assign popup trigger */}
                     <td className="px-5 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-1.5 flex-wrap">
                         <button
                           onClick={() => {
                             setSelectedDevice(device);
@@ -315,8 +351,9 @@ export default function DevicesPage() {
                             setIsAssignModalOpen(true);
                           }}
                           className="px-2.5 py-1 bg-white/5 border border-white/5 hover:border-white/10 rounded-lg text-xs font-bold text-foreground transition-all cursor-pointer"
+                          title="Gán người sử dụng"
                         >
-                          Gán User
+                          <span className="flex items-center gap-1"><UserPlus size={12} /> Gán</span>
                         </button>
 
                         <button
@@ -342,17 +379,50 @@ export default function DevicesPage() {
                           ) : (
                             <>
                               <RefreshCw size={12} />
-                              Nâng cấp OTA
+                              OTA
                             </>
                           )}
                         </button>
 
-                        <button
-                          onClick={() => handleDeleteDevice(device)}
-                          className="px-2.5 py-1 text-xs font-bold rounded-lg border border-danger/20 text-danger hover:bg-danger/10 transition-all cursor-pointer"
-                        >
-                          Quên thiết bị
-                        </button>
+                        {/* Action dropdown */}
+                        <div className="relative group">
+                          <button className="px-2.5 py-1 text-xs font-bold rounded-lg border border-white/10 text-muted hover:text-foreground hover:bg-white/5 transition-all cursor-pointer flex items-center gap-1">
+                            <Trash2 size={12} /> Thao tác
+                          </button>
+                          <div className="absolute right-0 top-full mt-1 w-52 bg-[#111827] border border-white/10 rounded-xl shadow-2xl z-30 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 py-1.5">
+                            <button
+                              onClick={() => setActionModal({ type: "factory-reset", device })}
+                              className="w-full text-left px-4 py-2.5 text-xs font-medium text-foreground hover:bg-white/5 flex items-center gap-2.5 transition-colors"
+                            >
+                              <RotateCcw size={13} className="text-warning" />
+                              <div>
+                                <div className="font-bold">Xoá dữ liệu chat</div>
+                                <div className="text-[10px] text-muted mt-0.5">Giữ thiết bị, chỉ xoá lịch sử trò chuyện</div>
+                              </div>
+                            </button>
+                            <button
+                              onClick={() => setActionModal({ type: "transfer", device })}
+                              className="w-full text-left px-4 py-2.5 text-xs font-medium text-foreground hover:bg-white/5 flex items-center gap-2.5 transition-colors"
+                            >
+                              <ArrowRightLeft size={13} className="text-accent" />
+                              <div>
+                                <div className="font-bold">Chuyển nhượng</div>
+                                <div className="text-[10px] text-muted mt-0.5">Chuyển thiết bị cho người dùng khác</div>
+                              </div>
+                            </button>
+                            <div className="mx-3 my-1 border-t border-white/5" />
+                            <button
+                              onClick={() => setActionModal({ type: "forget", device })}
+                              className="w-full text-left px-4 py-2.5 text-xs font-medium text-danger hover:bg-danger/5 flex items-center gap-2.5 transition-colors"
+                            >
+                              <Trash2 size={13} />
+                              <div>
+                                <div className="font-bold">Quên thiết bị</div>
+                                <div className="text-[10px] text-muted mt-0.5">Gỡ thiết bị, cho phép đăng ký lại</div>
+                              </div>
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -421,6 +491,112 @@ export default function DevicesPage() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Action Confirmation Modal (Forget / Transfer / Factory Reset) */}
+      {actionModal.type && actionModal.device && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !actionLoading && setActionModal({ type: null, device: null })} />
+          
+          <div className="glass-card rounded-2xl max-w-md w-full p-6 relative overflow-hidden z-10 animate-in fade-in zoom-in duration-200">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h3 className="text-lg font-bold text-foreground">
+                  {actionModal.type === "forget" && "Quên thiết bị"}
+                  {actionModal.type === "transfer" && "Chuyển nhượng thiết bị"}
+                  {actionModal.type === "factory-reset" && "Xoá dữ liệu trò chuyện"}
+                </h3>
+                <p className="text-xs text-muted mt-0.5 font-mono">Serial: {actionModal.device.serialNumber}</p>
+              </div>
+              <button 
+                type="button"
+                onClick={() => !actionLoading && setActionModal({ type: null, device: null })}
+                className="p-1.5 rounded-lg hover:bg-white/10 text-muted hover:text-foreground transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Warning box */}
+            <div className={clsx(
+              "rounded-xl p-3 mb-4 text-xs leading-relaxed border",
+              actionModal.type === "forget" 
+                ? "bg-danger/5 border-danger/20 text-danger" 
+                : actionModal.type === "transfer"
+                ? "bg-accent/5 border-accent/20 text-accent"
+                : "bg-warning/5 border-warning/20 text-warning"
+            )}>
+              {actionModal.type === "forget" && (
+                <>
+                  <strong>⚠️ Cảnh báo:</strong> Thiết bị sẽ bị gỡ khỏi tài khoản của bạn.
+                  Toàn bộ lịch sử trò chuyện <strong>(chỉ của thiết bị này)</strong> sẽ bị xoá.
+                  Thiết bị có thể được đăng ký lại bởi người dùng khác.
+                </>
+              )}
+              {actionModal.type === "transfer" && (
+                <>
+                  <strong>🔄 Chuyển nhượng:</strong> Thiết bị sẽ được chuyển cho người dùng mới.
+                  Toàn bộ lịch sử trò chuyện <strong>(chỉ của thiết bị này)</strong> sẽ bị xoá trước khi chuyển.
+                  Người nhận sẽ cần kết nối lại thiết bị qua PAssistant.
+                </>
+              )}
+              {actionModal.type === "factory-reset" && (
+                <>
+                  <strong>🔄 Đặt lại:</strong> Toàn bộ lịch sử trò chuyện <strong>(chỉ của thiết bị này)</strong> sẽ bị xoá.
+                  Thiết bị vẫn giữ nguyên liên kết với tài khoản.
+                </>
+              )}
+            </div>
+
+            {/* Transfer: show target user input */}
+            {actionModal.type === "transfer" && (
+              <div className="mb-4">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-2">
+                  ID người nhận chuyển nhượng (User UUID)
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Nhập User ID của người nhận..."
+                  value={transferTargetId}
+                  onChange={(e) => setTransferTargetId(e.target.value)}
+                  className="w-full px-4 py-2.5 text-sm bg-black/20 border border-white/5 rounded-xl text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/50 transition-all font-mono"
+                />
+                <p className="text-[10px] text-muted mt-1.5">
+                  Tìm User ID trong trang Quản lý Người dùng.
+                </p>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-white/5">
+              <button 
+                type="button"
+                onClick={() => setActionModal({ type: null, device: null })}
+                disabled={actionLoading}
+                className="px-4 py-2 bg-white/5 border border-white/5 hover:border-white/10 text-foreground text-xs font-bold rounded-xl transition-all cursor-pointer disabled:opacity-50"
+              >
+                Huỷ bỏ
+              </button>
+              <button 
+                onClick={handleDeviceAction}
+                disabled={actionLoading}
+                className={clsx(
+                  "px-4 py-2 text-white text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50",
+                  actionModal.type === "forget" 
+                    ? "bg-danger hover:bg-danger/80" 
+                    : actionModal.type === "transfer"
+                    ? "bg-accent hover:bg-accent-hover"
+                    : "bg-warning hover:bg-warning/80"
+                )}
+              >
+                {actionLoading && <RefreshCw size={12} className="animate-spin" />}
+                {actionModal.type === "forget" && "Quên thiết bị"}
+                {actionModal.type === "transfer" && "Chuyển nhượng"}
+                {actionModal.type === "factory-reset" && "Xoá dữ liệu"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

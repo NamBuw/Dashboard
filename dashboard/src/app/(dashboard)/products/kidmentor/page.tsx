@@ -1,125 +1,192 @@
 "use client";
 
 import { useState } from "react";
-import {
-  BookOpen,
-  Calendar,
-  Sparkles,
-  TrendingUp,
-  Award,
-} from "lucide-react";
+import { BookOpen, Search, Loader2, FileText, Sparkles } from "lucide-react";
 
-interface ProgressItem {
-  id: string;
-  subject: string;
-  completedLessons: number;
-  totalLessons: number;
-  score: number;
-  status: "excellent" | "good" | "needs_improvement";
+interface RagResult {
+  query: string;
+  intent: {
+    subject?: string;
+    title?: string;
+    keyword?: string;
+    query_type?: string;
+  };
+  sources: string[];
+  context: string;
+  contentLines: string[];
+  recitationTitle: string;
 }
 
-const mockProgress: ProgressItem[] = [
-  { id: "1", subject: "Toán học Tư duy", completedLessons: 24, totalLessons: 30, score: 9.2, status: "excellent" },
-  { id: "2", subject: "Tiếng Anh Phát âm", completedLessons: 18, totalLessons: 45, score: 8.5, status: "good" },
-  { id: "3", subject: "Logic & Lập trình nhí", completedLessons: 5, totalLessons: 20, score: 7.0, status: "needs_improvement" },
-];
+export default function KidMentorPage() {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<RagResult | null>(null);
+  const [error, setError] = useState("");
 
-export default function KidMentorProductPage() {
-  const [progress] = useState<ProgressItem[]>(mockProgress);
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+    setLoading(true);
+    setError("");
+    setResult(null);
+
+    try {
+      const res = await fetch("/api/rag-query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: searchQuery.trim() }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Lỗi truy vấn");
+      } else {
+        setResult(data);
+      }
+    } catch {
+      setError("Không kết nối được server");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const subjectColors: Record<string, string> = {
+    "Toán": "bg-blue-500/20 text-blue-400 border-blue-500/30",
+    "Ngữ Văn": "bg-purple-500/20 text-purple-400 border-purple-500/30",
+    "KHTN": "bg-green-500/20 text-green-400 border-green-500/30",
+    "Lịch Sử": "bg-amber-500/20 text-amber-400 border-amber-500/30",
+    "Địa Lý": "bg-cyan-500/20 text-cyan-400 border-cyan-500/30",
+  };
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
+      {/* Header */}
       <div>
-        <h1 className="text-3xl font-extrabold text-foreground tracking-tight bg-gradient-to-r from-white via-gray-200 to-gray-500 bg-clip-text text-transparent">
-          Tiến độ Kid Mentor App
+        <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+          <BookOpen size={24} className="text-accent" />
+          Kid Mentor - Tra cứu Sách
         </h1>
-        <p className="text-muted text-sm mt-1">
-          Giám sát tiến độ học tập, kết quả điểm số trung bình và mức độ hoạt động của các bé.
+        <p className="text-sm text-muted mt-1">
+          Tìm kiếm kiến thức từ kho sách giáo khoa, bài thơ, bài học
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Progress List Column-span-2 */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="glass-card rounded-2xl p-5">
-            <h2 className="text-lg font-bold text-foreground mb-1.5 flex items-center gap-2">
-              <BookOpen size={18} className="text-accent" />
-              Chương trình Học tập đang kích hoạt (Bé Bảo Vy)
-            </h2>
-            <p className="text-xs text-muted mb-6">Theo dõi trực tiếp tỷ lệ hoàn thành học phần khóa học nhí.</p>
-
-            <div className="space-y-5">
-              {progress.map((item) => {
-                const percentage = Math.round((item.completedLessons / item.totalLessons) * 100);
-                return (
-                  <div key={item.id} className="p-4 bg-white/5 border border-white/5 rounded-2xl space-y-3">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="text-sm font-bold text-foreground">{item.subject}</h4>
-                        <p className="text-xs text-muted mt-0.5">Tiến độ bài học: {item.completedLessons}/{item.totalLessons} bài</p>
-                      </div>
-                      <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded border ${
-                        item.status === "excellent" ? "bg-success/10 text-success border-success/20" :
-                        item.status === "good" ? "bg-accent/10 text-accent border-accent/20" : "bg-amber-500/10 text-amber-500 border-amber-500/20"
-                      }`}>
-                        {item.status === "excellent" ? "Xuất sắc" : item.status === "good" ? "Khá giỏi" : "Cần cố gắng"}
-                      </span>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between text-xs font-mono text-muted">
-                        <span>Hoàn thành {percentage}%</span>
-                        <span>Điểm số: {item.score}/10</span>
-                      </div>
-                      <div className="h-2 bg-gray-900 rounded-full overflow-hidden border border-white/5">
-                        <div 
-                          className="h-full rounded-full bg-accent transition-all duration-500"
-                          style={{ width: `${percentage}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+      {/* Search */}
+      <div className="glass-card rounded-xl p-4">
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              placeholder="Hỏi về bất kỳ chủ đề nào... VD: Tóm tắt bài thơ Việt Nam của Tố Hữu"
+              className="w-full pl-9 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-accent"
+            />
           </div>
+          <button
+            onClick={handleSearch}
+            disabled={loading || !searchQuery.trim()}
+            className="px-4 py-2.5 bg-accent hover:bg-accent-hover text-white rounded-lg text-sm font-medium disabled:opacity-30 cursor-pointer flex items-center gap-2"
+          >
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+            Tra cứu
+          </button>
         </div>
-
-        {/* Learning Badges Column-span-1 */}
-        <div className="space-y-6">
-          <div className="glass-card rounded-2xl p-5">
-            <h2 className="text-lg font-bold text-foreground mb-1.5 flex items-center gap-2">
-              <Award size={18} className="text-amber-500" />
-              Huy hiệu Danh giá đạt được
-            </h2>
-            <p className="text-xs text-muted mb-4">Các cột mốc học tập bé Bảo Vy đã gặt hái.</p>
-
-            <div className="space-y-3">
-              <div className="p-3 bg-white/5 rounded-xl border border-white/5 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-500 shrink-0">
-                  <Sparkles size={18} />
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold text-foreground">Trùm Toán nhí</h4>
-                  <p className="text-[10px] text-muted mt-0.5">Hoàn thành 10 bài toán điểm tuyệt đối.</p>
-                </div>
-              </div>
-
-              <div className="p-3 bg-white/5 rounded-xl border border-white/5 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400 shrink-0">
-                  <Calendar size={18} />
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold text-foreground">Chăm học Chuyên cần</h4>
-                  <p className="text-[10px] text-muted mt-0.5">Học liên tục 7 ngày trong tuần.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
       </div>
+
+      {/* Error */}
+      {error && (
+        <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-400">
+          {error}
+        </div>
+      )}
+
+      {/* Results */}
+      {result && (
+        <div className="space-y-4">
+          {/* Intent info */}
+          <div className="glass-card rounded-xl p-4">
+            <h3 className="text-xs font-bold text-muted uppercase tracking-wider mb-2">Kết quả truy vấn</h3>
+            <div className="flex flex-wrap gap-2">
+              {result.intent.subject && (
+                <span className={`text-xs font-semibold px-2.5 py-1 rounded-lg border ${subjectColors[result.intent.subject] || "bg-white/10 text-muted border-white/10"}`}>
+                  {result.intent.subject}
+                </span>
+              )}
+              {result.intent.title && (
+                <span className="text-xs font-medium px-2.5 py-1 rounded-lg bg-white/10 text-foreground border border-white/10">
+                  📖 {result.intent.title}
+                </span>
+              )}
+              {result.intent.query_type && (
+                <span className="text-xs px-2.5 py-1 rounded-lg bg-white/5 text-muted border border-white/5">
+                  {result.intent.query_type === "recite_full_text" ? "Đọc/Ngâm" : "Giải thích"}
+                </span>
+              )}
+              {result.sources.length > 0 && (
+                <span className="text-xs px-2.5 py-1 rounded-lg bg-white/5 text-muted border border-white/5">
+                  Nguồn: {result.sources.join(", ")}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Content */}
+          {result.recitationTitle ? (
+            <div className="glass-card rounded-xl p-5">
+              <h3 className="text-lg font-bold text-foreground flex items-center gap-2 mb-3">
+                <FileText size={16} className="text-accent" />
+                {result.recitationTitle}
+              </h3>
+              <div className="space-y-1.5">
+                {result.contentLines.map((line, i) => (
+                  <p key={i} className="text-sm text-foreground/80 leading-relaxed">
+                    {line}
+                  </p>
+                ))}
+              </div>
+            </div>
+          ) : result.context ? (
+            <div className="glass-card rounded-xl p-5">
+              <h3 className="text-lg font-bold text-foreground flex items-center gap-2 mb-3">
+                <Sparkles size={16} className="text-accent" />
+                Nội dung
+              </h3>
+              <div className="text-sm text-foreground/80 leading-relaxed whitespace-pre-line">
+                {result.context}
+              </div>
+            </div>
+          ) : (
+            <div className="glass-card rounded-xl p-5 text-center text-muted text-sm">
+              Không tìm thấy nội dung phù hợp cho câu truy vấn này.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Example queries */}
+      {!result && !loading && (
+        <div className="glass-card rounded-xl p-4">
+          <h3 className="text-xs font-bold text-muted uppercase tracking-wider mb-3">Gợi ý truy vấn</h3>
+          <div className="flex flex-wrap gap-2">
+            {[
+              "Tóm tắt bài thơ Việt Nam của Tố Hữu",
+              "Phân tích nhân vật Mị trong Vợ nhặt",
+              "Giải bài toán phương trình bậc hai",
+              "Hệ thống kiến thức cơ học Newton",
+              "Đọc bài thơ Truyện Kiều",
+            ].map((q) => (
+              <button
+                key={q}
+                onClick={() => { setSearchQuery(q); }}
+                className="text-xs px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-muted hover:text-foreground hover:border-white/20 transition-colors cursor-pointer"
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

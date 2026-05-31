@@ -30,12 +30,32 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if device already exists
-    const [existing] = await query<{ id: string; owner_id: string }>(
-      `SELECT id, owner_id FROM devices WHERE mac_address = $1`,
+    const [existing] = await query<{ id: string; owner_id: string; status: string }>(
+      `SELECT id, owner_id, status FROM devices WHERE mac_address = $1`,
       [mac_address.trim()]
     );
 
     if (existing) {
+      // Device was forgotten — allow any user to reclaim it
+      if (existing.status === "forgotten") {
+        await query(
+          `UPDATE devices SET owner_id = $1, status = 'online', last_seen_at = NOW(), assigned_user_id = NULL WHERE id = $2`,
+          [user.id, existing.id]
+        );
+        // Re-create owner link
+        await query(
+          `INSERT INTO device_user_links (device_id, user_id, link_type, linked_by)
+           VALUES ($1, $2, 'owner', $2)
+           ON CONFLICT DO NOTHING`,
+          [existing.id, user.id]
+        );
+        return NextResponse.json({
+          success: true,
+          deviceId: existing.id,
+          message: "Forgotten device reclaimed successfully",
+        });
+      }
+
       // Device exists - check if same owner
       if (existing.owner_id === user.id) {
         // Update last_seen_at

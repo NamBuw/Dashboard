@@ -99,12 +99,31 @@ export async function POST(request: NextRequest) {
     const targetOwnerId = isSuperUser && ownerId ? ownerId : currentUserId;
 
     // Check if device already registered
-    const [existing] = await query<{ id: string }>(
-      `SELECT id FROM devices WHERE mac_address = $1 OR serial_number = $2`,
+    const [existing] = await query<{ id: string; status: string; owner_id: string }>(
+      `SELECT id, status, owner_id FROM devices WHERE mac_address = $1 OR serial_number = $2`,
       [macAddress.trim(), serialNumber.trim()]
     );
 
     if (existing) {
+      // Allow reclaiming forgotten devices
+      if (existing.status === "forgotten") {
+        await query(
+          `UPDATE devices SET owner_id = $1, status = 'online', last_seen_at = NOW(), assigned_user_id = NULL WHERE id = $2`,
+          [targetOwnerId, existing.id]
+        );
+        await query(
+          `INSERT INTO device_user_links (device_id, user_id, link_type, linked_by)
+           VALUES ($1, $2, 'owner', $2)
+           ON CONFLICT DO NOTHING`,
+          [existing.id, targetOwnerId]
+        );
+        return NextResponse.json({
+          success: true,
+          deviceId: existing.id,
+          message: "Forgotten device reclaimed successfully",
+        });
+      }
+
       return NextResponse.json(
         { error: "Device with this MAC or Serial is already registered" },
         { status: 400 }
@@ -149,8 +168,9 @@ export async function POST(request: NextRequest) {
 
 /**
  * DELETE /api/devices?id=xxx
- * Delete a device and reset all associated data (conversation_logs, chat_sessions, chat_messages).
- * RBAC: admin can delete any, owner can delete own devices.
+ * Hard-delete a device and all associated data.
+ * This is a destructive admin-only operation. For normal device removal, use POST /api/devices/actions with action="forget".
+ * RBAC: admin only.
  */
 export async function DELETE(request: NextRequest) {
   try {
@@ -160,7 +180,14 @@ export async function DELETE(request: NextRequest) {
     }
 
     const isSuperUser = !!session.user.is_superuser;
-    const currentUserId = session.user.id;
+
+    if (!isSuperUser) {
+      return NextResponse.json(
+        { error: "Forbidden - Only admins can permanently delete devices. Use 'Quên thiết bị' instead." },
+        { status: 403 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const deviceId = searchParams.get("id");
 
@@ -168,9 +195,8 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Missing device id" }, { status: 400 });
     }
 
-    // Fetch device to check ownership
-    const [device] = await query<{ id: string; owner_id: string }>(
-      `SELECT id, owner_id FROM devices WHERE id = $1`,
+    const [device] = await query<{ id: string; mac_address: string; label: string | null }>(
+      `SELECT id, mac_address, label FROM devices WHERE id = $1`,
       [deviceId]
     );
 
@@ -178,21 +204,11 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Device not found" }, { status: 404 });
     }
 
-    if (!isSuperUser && device.owner_id !== currentUserId) {
-      return NextResponse.json(
-        { error: "Forbidden - You do not own this device" },
-        { status: 403 }
-      );
-    }
-
-    // Reset conversation data associated with this device's owner
-    // Delete conversation_logs for the owner
-    await query(`DELETE FROM conversation_logs WHERE user_id = $1`, [device.owner_id]);
-
-    // Delete chat sessions and messages for the owner
+    // Clear all conversation data for this device
+    await query(`DELETE FROM conversation_logs WHERE user_id = (SELECT owner_id FROM devices WHERE id = $1)`, [deviceId]);
     const sessionIds = await query<{ id: string }>(
-      `SELECT id FROM chat_sessions WHERE user_id = $1`,
-      [device.owner_id]
+      `SELECT id FROM chat_sessions WHERE user_id = (SELECT owner_id FROM devices WHERE id = $1)`,
+      [deviceId]
     );
     if (sessionIds.length > 0) {
       const ids = sessionIds.map((s) => s.id);
@@ -203,12 +219,12 @@ export async function DELETE(request: NextRequest) {
     // Delete device links
     await query(`DELETE FROM device_user_links WHERE device_id = $1`, [deviceId]);
 
-    // Delete the device
+    // Hard-delete the device
     await query(`DELETE FROM devices WHERE id = $1`, [deviceId]);
 
     return NextResponse.json({
       success: true,
-      message: "Device deleted and conversation data reset",
+      message: `Device "${device.label || device.mac_address}" permanently deleted with all associated data.`,
     });
   } catch (error) {
     console.error("Devices API DELETE error:", error);
