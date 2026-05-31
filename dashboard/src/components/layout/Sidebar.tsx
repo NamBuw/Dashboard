@@ -8,6 +8,8 @@ import {
   Monitor,
   Settings,
   MessageSquare,
+  BarChart3,
+  BookOpen,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -20,8 +22,12 @@ const navItems = [
   { label: "Quản lý User", href: "/users", icon: Users },
   { label: "Lịch sử Chat", href: "/chats", icon: MessageSquare },
   { label: "Thiết bị PTalk", href: "/devices", icon: Monitor },
+  { label: "Phân tích KG", href: "/kg-analytics", icon: BarChart3 },
+  { label: "Kho tri thức", href: "/kg-browse", icon: BookOpen },
   { label: "Cài đặt", href: "/settings", icon: Settings },
 ];
+
+const ADMIN_ONLY_HREFS = ["/users", "/settings", "/kg-analytics", "/kg-browse"];
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -31,7 +37,7 @@ export default function Sidebar() {
   const isSuperUser = session?.user?.is_superuser;
 
   const filteredItems = navItems.filter((item) => {
-    if ((item.href === "/users" || item.href === "/settings") && !isSuperUser) {
+    if (ADMIN_ONLY_HREFS.includes(item.href) && !isSuperUser) {
       return false;
     }
     return true;

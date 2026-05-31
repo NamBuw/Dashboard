@@ -153,7 +153,8 @@ export const authConfig: NextAuthConfig = {
                           pathname.startsWith("/chats") ||
                           pathname.startsWith("/devices") ||
                           pathname.startsWith("/products");
-      const isOnAdminOnly = pathname.startsWith("/users") || pathname.startsWith("/settings");
+      const isOnAdminOnly = pathname.startsWith("/users") || pathname.startsWith("/settings") ||
+                          pathname.startsWith("/kg-analytics") || pathname.startsWith("/kg-browse");
       const isProtected = isOnDashboard || isOnAdminOnly;
 
       if (isProtected) {
