@@ -70,12 +70,12 @@ function LoginContent() {
               Hệ sinh thái Sản phẩm
             </h2>
             <p className="text-[15px] text-muted-foreground mt-3 leading-relaxed">
-              Theo dõi toàn bộ PTalk Assistant, Kid Mentor, Elder Kare từ một dashboard duy nhất.
+              Theo dõi toàn bộ PTalk Assistant, Kid Mentor, Elder Care từ một dashboard duy nhất.
             </p>
           </div>
 
           <div className="flex gap-2">
-            {["PTalk Assistant", "Kid Mentor", "Elder Kare"].map((product) => (
+            {["PTalk Assistant", "Kid Mentor", "Elder Care"].map((product) => (
               <div
                 key={product}
                 className="px-3 py-1.5 bg-surface rounded-md text-[12px] font-medium text-muted-foreground"

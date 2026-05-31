@@ -66,7 +66,7 @@ export default function ForgotPasswordPage() {
           </p>
 
           <div className="flex gap-4 pt-4">
-            {["PTalk Assistant", "Kid Mentor", "Elder Kare"].map((product) => (
+            {["PTalk Assistant", "Kid Mentor", "Elder Care"].map((product) => (
               <div
                 key={product}
                 className="px-4 py-2 bg-white/10 rounded-lg text-sm font-medium"

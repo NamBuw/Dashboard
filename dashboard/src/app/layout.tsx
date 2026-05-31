@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "CTS Dashboard - Quản lý Hệ sinh thái Sản phẩm",
   description:
-    "Dashboard quản lý tập trung cho hệ sinh thái PTalk Assistant, Kid Mentor, Elder Kare",
+    "Dashboard quản lý tập trung cho hệ sinh thái PTalk Assistant, Kid Mentor, Elder Care",
 };
 
 export default function RootLayout({

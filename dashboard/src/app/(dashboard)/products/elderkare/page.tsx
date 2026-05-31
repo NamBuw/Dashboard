@@ -42,7 +42,7 @@ export default function ElderKareProductPage() {
       {/* Page Header */}
       <div>
         <h1 className="text-3xl font-extrabold text-foreground tracking-tight bg-gradient-to-r from-white via-gray-200 to-gray-500 bg-clip-text text-transparent">
-          Báo cáo Elder Kare App
+          Báo cáo Elder Care App
         </h1>
         <p className="text-muted text-sm mt-1">
           Theo dõi lịch nhắc uống thuốc của người cao tuổi, lịch sử xác nhận và các cảnh báo hành vi sức khỏe khẩn cấp.
