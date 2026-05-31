@@ -18,29 +18,29 @@ export async function GET(req: NextRequest) {
   try {
     const { value, cached, cachedAt } = await getOrCompute(key, 60_000, async () => {
       return await withReadSession(async (s) => {
-        const [totals, heatmap, demote, books, ftIdx] = await Promise.all([
-          s.run(`
+        // Chạy TUẦN TỰ trên cùng 1 session — Neo4j session không cho phép nhiều
+        // query đồng thời (Promise.all gây lỗi "open transaction").
+        const totals = await s.run(`
             MATCH (k:KnowledgeChunk)
             WITH count(k) AS total_kc,
                  sum(CASE WHEN coalesce(k.production_ready,false)=true THEN 1 ELSE 0 END) AS total_prod,
                  sum(CASE WHEN k.lesson_no IS NOT NULL THEN 1 ELSE 0 END) AS with_lesson_no,
                  sum(CASE WHEN k.trang_no  IS NOT NULL THEN 1 ELSE 0 END) AS with_trang_no
-            RETURN total_kc, total_prod, with_lesson_no, with_trang_no`),
-          s.run(`
+            RETURN total_kc, total_prod, with_lesson_no, with_trang_no`);
+        const heatmap = await s.run(`
             MATCH (k:KnowledgeChunk)
             WHERE coalesce(k.production_ready,false)=true
               AND ($bo_sach='ALL' OR k.bo_sach=$bo_sach OR ($bo_sach='NONE' AND k.bo_sach IS NULL))
             RETURN k.subject_code AS subject, toInteger(k.grade) AS grade, count(*) AS cnt
-            ORDER BY subject, grade`, { bo_sach }),
-          s.run(`
+            ORDER BY subject, grade`, { bo_sach });
+        const demote = await s.run(`
             MATCH (k:KnowledgeChunk) WHERE coalesce(k.production_ready,false)=false
             RETURN coalesce(k.demote_reason,'other') AS reason, count(*) AS cnt
-            ORDER BY cnt DESC LIMIT 12`),
-          s.run(`
+            ORDER BY cnt DESC LIMIT 12`);
+        const books = await s.run(`
             MATCH (k:KnowledgeChunk) WHERE coalesce(k.production_ready,false)=true
-            RETURN coalesce(k.bo_sach,'NONE') AS bo_sach, count(*) AS cnt ORDER BY cnt DESC`),
-          s.run(`SHOW INDEXES YIELD name, type, state WHERE type='FULLTEXT' AND state='ONLINE' RETURN collect(name) AS indexes`),
-        ]);
+            RETURN coalesce(k.bo_sach,'NONE') AS bo_sach, count(*) AS cnt ORDER BY cnt DESC`);
+        const ftIdx = await s.run(`SHOW INDEXES YIELD name, type, state WHERE type='FULLTEXT' AND state='ONLINE' RETURN collect(name) AS indexes`);
 
         const t = totals.records[0];
         const total_kc = t.get("total_kc");
