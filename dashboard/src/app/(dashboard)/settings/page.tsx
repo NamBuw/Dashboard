@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Settings,
   Bell,
@@ -10,7 +10,12 @@ import {
   Save,
   Radio,
   Zap,
+  Shield,
+  Plus,
+  Trash2,
 } from "lucide-react";
+import { clsx } from "clsx";
+import { useSession } from "next-auth/react";
 
 interface SystemService {
   name: string;
@@ -18,19 +23,76 @@ interface SystemService {
   latency: number;
 }
 
+interface BannedWord {
+  id: string;
+  word: string;
+  category: string;
+  set_by_role: string;
+  set_by_name: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
 export default function SettingsPage() {
+  const { data: session } = useSession();
   const [telegramToken, setTelegramToken] = useState("bot1289381923:AAElk2...");
   const [telegramChatId, setTelegramChatId] = useState("-100238128");
   const [offlineThreshold, setOfflineThreshold] = useState(15);
   const [emailAlerts, setEmailAlerts] = useState(true);
 
-  // Mock system services latency health check
   const [services] = useState<SystemService[]>([
     { name: "Auth Identity Service", status: "healthy", latency: 45 },
     { name: "PostgreSQL Database", status: "healthy", latency: 2 },
     { name: "MQTT Broker (PTalk)", status: "healthy", latency: 12 },
     { name: "KidMentor API Gateway", status: "warning", latency: 180 },
   ]);
+
+  // Banned words state
+  const [bannedWords, setBannedWords] = useState<BannedWord[]>([]);
+  const [newWord, setNewWord] = useState("");
+  const [newCategory, setNewCategory] = useState("general");
+  const [loadingWords, setLoadingWords] = useState(false);
+
+  const isSuperUser = !!session?.user?.is_superuser;
+
+  const fetchBannedWords = useCallback(async () => {
+    setLoadingWords(true);
+    try {
+      const res = await fetch("/api/banned-words");
+      const data = await res.json();
+      setBannedWords(data.words || []);
+    } catch { /* ignore */ }
+    setLoadingWords(false);
+  }, []);
+
+  useEffect(() => { fetchBannedWords(); }, [fetchBannedWords]);
+
+  const handleAddWord = async () => {
+    if (!newWord.trim()) return;
+    try {
+      const res = await fetch("/api/banned-words", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          word: newWord.trim(),
+          category: newCategory,
+          setByRole: isSuperUser ? "admin" : "parent",
+        }),
+      });
+      if (res.ok) {
+        setNewWord("");
+        fetchBannedWords();
+      }
+    } catch { /* ignore */ }
+  };
+
+  const handleDeleteWord = async (id: string) => {
+    if (!confirm("Xoá từ cấm này?")) return;
+    try {
+      const res = await fetch(`/api/banned-words?id=${id}`, { method: "DELETE" });
+      if (res.ok) fetchBannedWords();
+    } catch { /* ignore */ }
+  };
 
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
@@ -173,6 +235,70 @@ export default function SettingsPage() {
           </div>
         </div>
 
+      </div>
+
+      {/* ═══════ Banned Words Management ═══════ */}
+      <div className="glass-card rounded-2xl p-5">
+        <h2 className="text-lg font-bold text-foreground flex items-center gap-2 mb-4">
+          <Shield size={18} className="text-danger" />
+          Từ ngữ bị cấm
+        </h2>
+        <p className="text-xs text-muted mb-4">
+          {isSuperUser ? "Quản lý từ cấm toàn hệ thống (Admin)" : "Thêm từ cấm cho con bạn (Phụ huynh)"}
+        </p>
+
+        {/* Add word form */}
+        <div className="flex gap-2 mb-4">
+          <input
+            value={newWord}
+            onChange={(e) => setNewWord(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleAddWord()}
+            placeholder="Nhập từ cần cấm..."
+            className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-accent"
+          />
+          <select
+            value={newCategory}
+            onChange={(e) => setNewCategory(e.target.value)}
+            className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-foreground focus:outline-none"
+          >
+            <option value="general">Chung</option>
+            <option value="violence">Bạo lực</option>
+            <option value="profanity">Vulgar</option>
+            <option value="danger">Nguy hiểm</option>
+          </select>
+          <button
+            onClick={handleAddWord}
+            disabled={!newWord.trim()}
+            className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-lg text-sm font-medium disabled:opacity-30 cursor-pointer"
+          >
+            <Plus size={14} />
+          </button>
+        </div>
+
+        {/* Word list */}
+        <div className="space-y-2">
+          {loadingWords && <p className="text-xs text-muted">Đang tải...</p>}
+          {!loadingWords && bannedWords.length === 0 && (
+            <p className="text-xs text-muted py-2">Chưa có từ nào bị cấm.</p>
+          )}
+          {bannedWords.map((w) => (
+            <div key={w.id} className="flex items-center justify-between p-2.5 bg-white/5 rounded-lg border border-white/5">
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-foreground">{w.word}</span>
+                <span className="text-[10px] px-2 py-0.5 rounded bg-white/10 text-muted">{w.category}</span>
+                <span className={`text-[10px] px-2 py-0.5 rounded ${w.set_by_role === "admin" ? "bg-accent/20 text-accent" : "bg-purple/20 text-purple"}`}>
+                  {w.set_by_role === "admin" ? "Admin" : "Phụ huynh"}
+                </span>
+              </div>
+              <button
+                onClick={() => handleDeleteWord(w.id)}
+                className="p-1 text-danger hover:bg-danger/10 rounded cursor-pointer"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
