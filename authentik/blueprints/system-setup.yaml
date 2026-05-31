@@ -142,7 +142,19 @@ entries:
         - !KeyOf prompt-password
         - !KeyOf prompt-password-repeat
 
-  # User write stage
+  # Email verification stage
+  - model: authentik_stages_email.emailstage
+    id: stage-email-verification
+    state: present
+    identifiers:
+      name: stage-email-verification
+    attrs:
+      activate_user_on_success: true
+      use_global_settings: true
+      token_expiry_minutes: 30
+      subject: "Xac thuc email - PTalk Account"
+
+  # User write stage (create as inactive until email verified)
   - model: authentik_stages_user_write.userwritestage
     id: stage-user-write
     state: present
@@ -150,6 +162,7 @@ entries:
       name: stage-user-write-enrollment
     attrs:
       user_creation_mode: always_create
+      create_users_as_inactive: true
       create_users_group: !KeyOf group-account-owner
 
   # User login stage
@@ -170,6 +183,15 @@ entries:
       stage: !KeyOf stage-enrollment-prompt
     attrs:
       order: 10
+
+  - model: authentik_flows.flowstagebinding
+    id: binding-email-verification
+    state: present
+    identifiers:
+      target: !KeyOf flow-enrollment
+      stage: !KeyOf stage-email-verification
+    attrs:
+      order: 15
 
   - model: authentik_flows.flowstagebinding
     id: binding-enrollment-user-write

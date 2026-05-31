@@ -13,6 +13,8 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMsg, setResendMsg] = useState("");
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,17 +119,48 @@ export default function SignupPage() {
 
           {success ? (
             <div className="space-y-6">
-              <div className="p-4 bg-green-50 border border-green-200 rounded-xl flex items-start gap-3">
-                <CheckCircle size={24} className="text-green-600 mt-0.5 shrink-0" />
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-3">
+                <CheckCircle size={24} className="text-blue-600 mt-0.5 shrink-0" />
                 <div>
-                  <p className="text-sm font-medium text-green-800">
-                    Đăng ký thành công!
+                  <p className="text-sm font-medium text-blue-800">
+                    Dang ky thanh cong!
                   </p>
-                  <p className="text-sm text-green-700 mt-1">
-                    Tài khoản của bạn đã được tạo. Bạn có thể đăng nhập ngay bây giờ.
+                  <p className="text-sm text-blue-700 mt-1">
+                    Mot email xac thuc da duoc gui den <strong>{email}</strong>.
+                    Vui long kiem tra hop thu va nhan lien ket xac thuc de kich hoat tai khoan.
                   </p>
                 </div>
               </div>
+              {resendMsg && (
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+                  {resendMsg}
+                </div>
+              )}
+              <button
+                onClick={async () => {
+                  setResendLoading(true);
+                  setResendMsg("");
+                  try {
+                    const res = await fetch("/api/auth/resend-verification", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ email }),
+                    });
+                    const data = await res.json();
+                    setResendMsg(data.message || "Email xac thuc da duoc gui lai!");
+                  } catch {
+                    setResendMsg("Khong the gui lai email. Vui long thu lai sau.");
+                  }
+                  setResendLoading(false);
+                }}
+                disabled={resendLoading}
+                className="w-full flex items-center justify-center gap-2 px-6 py-3 border border-accent text-accent hover:bg-accent/5 rounded-lg font-medium transition-colors disabled:opacity-60"
+              >
+                {resendLoading ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : null}
+                {resendLoading ? "Dang gui..." : "Gui lai email xac thuc"}
+              </button>
               <Link
                 href="/login"
                 className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-accent hover:bg-accent-hover text-white rounded-lg font-medium transition-colors"

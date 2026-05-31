@@ -147,6 +147,78 @@ export async function POST(request: NextRequest) {
   }
 }
 
+/**
+ * DELETE /api/devices?id=xxx
+ * Delete a device and reset all associated data (conversation_logs, chat_sessions, chat_messages).
+ * RBAC: admin can delete any, owner can delete own devices.
+ */
+export async function DELETE(request: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const isSuperUser = !!session.user.is_superuser;
+    const currentUserId = session.user.id;
+    const { searchParams } = new URL(request.url);
+    const deviceId = searchParams.get("id");
+
+    if (!deviceId) {
+      return NextResponse.json({ error: "Missing device id" }, { status: 400 });
+    }
+
+    // Fetch device to check ownership
+    const [device] = await query<{ id: string; owner_id: string }>(
+      `SELECT id, owner_id FROM devices WHERE id = $1`,
+      [deviceId]
+    );
+
+    if (!device) {
+      return NextResponse.json({ error: "Device not found" }, { status: 404 });
+    }
+
+    if (!isSuperUser && device.owner_id !== currentUserId) {
+      return NextResponse.json(
+        { error: "Forbidden - You do not own this device" },
+        { status: 403 }
+      );
+    }
+
+    // Reset conversation data associated with this device's owner
+    // Delete conversation_logs for the owner
+    await query(`DELETE FROM conversation_logs WHERE user_id = $1`, [device.owner_id]);
+
+    // Delete chat sessions and messages for the owner
+    const sessionIds = await query<{ id: string }>(
+      `SELECT id FROM chat_sessions WHERE user_id = $1`,
+      [device.owner_id]
+    );
+    if (sessionIds.length > 0) {
+      const ids = sessionIds.map((s) => s.id);
+      await query(`DELETE FROM chat_messages WHERE session_id = ANY($1)`, [ids]);
+      await query(`DELETE FROM chat_sessions WHERE id = ANY($1)`, [ids]);
+    }
+
+    // Delete device links
+    await query(`DELETE FROM device_user_links WHERE device_id = $1`, [deviceId]);
+
+    // Delete the device
+    await query(`DELETE FROM devices WHERE id = $1`, [deviceId]);
+
+    return NextResponse.json({
+      success: true,
+      message: "Device deleted and conversation data reset",
+    });
+  } catch (error) {
+    console.error("Devices API DELETE error:", error);
+    return NextResponse.json(
+      { error: "Failed to delete device" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function PUT(request: NextRequest) {
   try {
     const session = await auth();

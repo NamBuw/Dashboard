@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import bcrypt from "bcryptjs";
-import { randomUUID } from "crypto";
+import { randomUUID, createHash } from "crypto";
+import { sendVerificationEmail } from "@/lib/email";
 
 const AUTHENTIK_URL = process.env.AUTHENTIK_URL || "https://auth.ctslab.net";
 const AUTHENTIK_API_TOKEN = process.env.AUTHENTIK_API_TOKEN || "";
@@ -61,12 +62,26 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Check for existing user in Dashboard DB
-    const existing = await query<{ id: string }>(
-      `SELECT id FROM users WHERE email = $1 OR username = $2 LIMIT 1`,
+    const existing = await query<{ id: string; email_verified: boolean }>(
+      `SELECT id, email_verified FROM users WHERE email = $1 OR username = $2 LIMIT 1`,
       [email.toLowerCase().trim(), username.toLowerCase().trim()]
     );
 
     if (existing.length > 0) {
+      // If user exists but hasn't verified email, allow re-send
+      if (!existing[0].email_verified) {
+        const [user] = await query<{ id: string; username: string; email: string }>(
+          `SELECT id, username, email FROM users WHERE id = $1`,
+          [existing[0].id]
+        );
+        if (user) {
+          await sendVerificationToken(user.id, user.email, user.username);
+          return NextResponse.json(
+            { success: true, message: "Email xac thuc da duoc gui lai. Vui long kiem tra hop thu.", requiresVerification: true },
+            { status: 200 }
+          );
+        }
+      }
       return NextResponse.json(
         { error: "Email hoặc tên đăng nhập đã được sử dụng" },
         { status: 409 }
@@ -82,7 +97,7 @@ export async function POST(request: NextRequest) {
           username: username.toLowerCase().trim(),
           email: email.trim(),
           name: username.trim(),
-          is_active: true,
+          is_active: false,  // Inactive until email verified
         }),
       });
 
@@ -181,13 +196,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 7. Insert user into Dashboard DB
+    // 7. Insert user into Dashboard DB (inactive + unverified)
+    let userId: string;
     try {
-      const userId = randomUUID();
-      const [newUser] = await query<{ id: string; username: string; email: string }>(
-        `INSERT INTO users (id, username, email, password_hash, display_name, user_type, authentik_user_id, subscription_tier, is_active, is_superuser)
-         VALUES ($1, $2, $3, $4, $5, 'account_owner', $6, 'basic', true, false)
-         RETURNING id, username, email`,
+      userId = randomUUID();
+      await query(
+        `INSERT INTO users (id, username, email, password_hash, display_name, user_type, authentik_user_id, subscription_tier, is_active, is_superuser, email_verified)
+         VALUES ($1, $2, $3, $4, $5, 'account_owner', $6, 'basic', false, false, false)`,
         [
           userId,
           username.toLowerCase().trim(),
@@ -197,14 +212,8 @@ export async function POST(request: NextRequest) {
           authentikUserId,
         ]
       );
-
-      return NextResponse.json(
-        { success: true, user: newUser },
-        { status: 201 }
-      );
     } catch (err) {
       console.error("Dashboard DB insert failed:", err);
-      // Cleanup: delete the Authentik user
       await authentikFetch(`/api/v3/core/users/${authentikUserId}/`, {
         method: "DELETE",
       }).catch(() => {});
@@ -213,11 +222,54 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    // 8. Send verification email
+    await sendVerificationToken(userId, email.trim(), username.trim());
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Tai khoan da duoc tao. Vui long kiem tra email de xac thuc tai khoan.",
+        requiresVerification: true,
+      },
+      { status: 201 }
+    );
   } catch (error) {
     console.error("Signup API error:", error);
     return NextResponse.json(
-      { error: "Lỗi hệ thống" },
+      { error: "Loi he thong" },
       { status: 500 }
     );
+  }
+}
+
+/**
+ * Generate verification token, save to DB, and send email.
+ */
+async function sendVerificationToken(
+  userId: string,
+  email: string,
+  username: string
+): Promise<void> {
+  const token = randomUUID();
+  const tokenHash = createHash("sha256").update(token).digest("hex");
+
+  // Delete any existing unused tokens for this user
+  await query(
+    `DELETE FROM email_verification_tokens WHERE user_id = $1 AND used = false`,
+    [userId]
+  );
+
+  // Insert new token (expires in 24 hours)
+  await query(
+    `INSERT INTO email_verification_tokens (user_id, token_hash, expires_at)
+     VALUES ($1, $2, NOW() + INTERVAL '24 hours')`,
+    [userId, tokenHash]
+  );
+
+  // Send email
+  const sent = await sendVerificationEmail(email, username, token);
+  if (!sent) {
+    console.warn("Verification email could not be sent. Token stored in DB.");
   }
 }

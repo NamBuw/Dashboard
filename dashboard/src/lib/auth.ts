@@ -54,20 +54,25 @@ export const authConfig: NextAuthConfig = {
 
         try {
           // Check if user exists
-          const [existing] = await query<{ id: string }>(
-            `SELECT id FROM users WHERE authentik_user_id = $1 OR email = $2 LIMIT 1`,
+          const [existing] = await query<{ id: string; email_verified: boolean }>(
+            `SELECT id, email_verified FROM users WHERE authentik_user_id = $1 OR email = $2 LIMIT 1`,
             [authentikUserId, email.toLowerCase()]
           );
 
           if (!existing) {
-            // Create user in Dashboard DB
+            // Create user in Dashboard DB (SSO users are pre-verified by Authentik)
             const userId = randomUUID();
             await query(
-              `INSERT INTO users (id, authentik_user_id, username, email, display_name, user_type, subscription_tier, is_active, is_superuser)
-               VALUES ($1, $2, $3, $4, $5, 'dashboard', 'pro', true, $6)`,
+              `INSERT INTO users (id, authentik_user_id, username, email, display_name, user_type, subscription_tier, is_active, is_superuser, email_verified)
+               VALUES ($1, $2, $3, $4, $5, 'dashboard', 'pro', true, $6, true)`,
               [userId, authentikUserId, email.split("@")[0].toLowerCase(), email.toLowerCase(), name, isSuperUser]
             );
           } else {
+            // Block login if email not verified (for users who signed up via custom form)
+            if (!existing.email_verified) {
+              return "/login?error=email-not-verified";
+            }
+
             // Update authentik_user_id if missing
             await query(
               `UPDATE users SET authentik_user_id = $1, updated_at = NOW() WHERE id = $2 AND authentik_user_id IS NULL`,

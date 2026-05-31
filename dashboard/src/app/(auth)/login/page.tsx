@@ -1,18 +1,48 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
 import { Loader2, KeyRound } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 
-export default function LoginPage() {
+function LoginContent() {
   const [ssoLoading, setSsoLoading] = useState(false);
   const [error, setError] = useState("");
+  const [resendEmail, setResendEmail] = useState("");
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMsg, setResendMsg] = useState("");
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const errorParam = searchParams.get("error");
+    if (errorParam === "email-not-verified") {
+      setError("Email chua duoc xac thuc. Vui long kiem tra hop thu hoac gui lai email xac thuc.");
+    }
+  }, [searchParams]);
 
   const handleAuthentikLogin = async () => {
     setSsoLoading(true);
     setError("");
     await signIn("authentik", { callbackUrl: "/dashboard" });
+  };
+
+  const handleResendVerification = async () => {
+    if (!resendEmail.trim()) return;
+    setResendLoading(true);
+    setResendMsg("");
+    try {
+      const res = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: resendEmail }),
+      });
+      const data = await res.json();
+      setResendMsg(data.message || "Email xac thuc da duoc gui!");
+    } catch {
+      setResendMsg("Khong the gui email. Vui long thu lai sau.");
+    }
+    setResendLoading(false);
   };
 
   return (
@@ -90,6 +120,32 @@ export default function LoginPage() {
             </div>
           )}
 
+          {/* Resend verification email (shown when error is email-not-verified) */}
+          {error.includes("chua duoc xac thuc") && (
+            <div className="p-3 bg-surface border border-border rounded-lg space-y-2">
+              <p className="text-[12px] text-muted-foreground">Nhap email de gui lai xac thuc:</p>
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  value={resendEmail}
+                  onChange={(e) => setResendEmail(e.target.value)}
+                  placeholder="email@example.com"
+                  className="flex-1 px-3 py-2 text-[13px] border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+                <button
+                  onClick={handleResendVerification}
+                  disabled={resendLoading}
+                  className="px-3 py-2 text-[12px] bg-accent text-white rounded-lg font-medium hover:bg-accent-hover disabled:opacity-50"
+                >
+                  {resendLoading ? "..." : "Gui"}
+                </button>
+              </div>
+              {resendMsg && (
+                <p className="text-[12px] text-green-600">{resendMsg}</p>
+              )}
+            </div>
+          )}
+
           {/* SSO Button */}
           <button
             onClick={handleAuthentikLogin}
@@ -122,5 +178,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Dang tai...</div>}>
+      <LoginContent />
+    </Suspense>
   );
 }

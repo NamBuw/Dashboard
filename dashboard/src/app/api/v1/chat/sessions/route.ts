@@ -42,12 +42,15 @@ export async function GET(request: NextRequest) {
       sourceFilter = `AND cl.source = 'ptalk'`;
     }
 
-    // Get virtual sessions: group by user + date
+    // Get virtual sessions: group by user + date, join devices for label
     const sessions = await query<{
       session_id: string;
       user_id: string;
       user_name: string;
       source: string;
+      device_id: string | null;
+      device_label: string | null;
+      device_mac: string | null;
       message_count: string;
       first_message: string;
       last_message: string;
@@ -58,14 +61,18 @@ export async function GET(request: NextRequest) {
         cl.user_id,
         u.display_name as user_name,
         cl.source,
+        cl.device_id,
+        d.label as device_label,
+        d.mac_address as device_mac,
         COUNT(*) as message_count,
         MIN(cl.created_at) as first_message,
         MAX(cl.created_at) as last_message,
         (SELECT message FROM conversation_logs WHERE user_id = cl.user_id AND DATE(created_at) = DATE(cl.created_at) ORDER BY created_at DESC LIMIT 1) as preview
        FROM conversation_logs cl
        LEFT JOIN users u ON cl.user_id = u.id
+       LEFT JOIN devices d ON cl.device_id = d.id
        WHERE 1=1 ${userFilter} ${sourceFilter}
-       GROUP BY cl.user_id, DATE(cl.created_at), u.display_name, cl.source
+       GROUP BY cl.user_id, DATE(cl.created_at), u.display_name, cl.source, cl.device_id, d.label, d.mac_address
        ORDER BY last_message DESC
        LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
       [...params, limit, offset]
@@ -87,6 +94,9 @@ export async function GET(request: NextRequest) {
         userName: s.user_name,
         productSource: productSource || "all",
         channel: "voice",
+        deviceId: s.device_id,
+        deviceLabel: s.device_label,
+        deviceMac: s.device_mac,
         messageCount: parseInt(s.message_count),
         startedAt: s.first_message,
         lastMessageAt: s.last_message,

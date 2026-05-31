@@ -102,6 +102,23 @@ export default function DevicesPage() {
     }
   };
 
+  // Delete device
+  const handleDeleteDevice = async (device: Device) => {
+    if (!confirm(`Xoá thiết bị "${device.serialNumber || device.id}"?\nToàn bộ lịch sử trò chuyện sẽ bị xoá.`)) return;
+
+    try {
+      const res = await fetch(`/api/devices?id=${device.id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (res.ok) {
+        fetchDevices();
+      } else {
+        alert(`Lỗi: ${data.error}`);
+      }
+    } catch {
+      alert("Không kết nối được server");
+    }
+  };
+
   // Register physical device (simulate registering a device hardware ID)
   const handleRegisterDevice = async () => {
     const serial = `PTALK-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -328,6 +345,13 @@ export default function DevicesPage() {
                               Nâng cấp OTA
                             </>
                           )}
+                        </button>
+
+                        <button
+                          onClick={() => handleDeleteDevice(device)}
+                          className="px-2.5 py-1 text-xs font-bold rounded-lg border border-danger/20 text-danger hover:bg-danger/10 transition-all cursor-pointer"
+                        >
+                          Quên thiết bị
                         </button>
                       </div>
                     </td>
