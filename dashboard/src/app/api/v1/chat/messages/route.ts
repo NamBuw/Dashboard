@@ -112,3 +112,50 @@ export async function POST() {
     { status: 405 }
   );
 }
+
+/**
+ * DELETE /api/v1/chat/messages?session_id=userId_YYYY-MM-DD
+ * Delete a virtual session's chat history (conversation_logs for that user+date).
+ * Auth: Bearer token. RBAC: owner or guardian (user_relationships) only.
+ */
+export async function DELETE(request: NextRequest) {
+  try {
+    const user = await verifyBearerToken(request.headers.get("Authorization"));
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { searchParams } = new URL(request.url);
+    const sessionId = searchParams.get("session_id");
+    if (!sessionId) return NextResponse.json({ error: "Missing session_id" }, { status: 400 });
+
+    const parts = sessionId.split("_");
+    if (parts.length < 2) {
+      return NextResponse.json(
+        { error: "Invalid session_id format. Expected: userId_YYYY-MM-DD" },
+        { status: 400 }
+      );
+    }
+    const sessionUserId = parts[0];
+    const sessionDate = parts.slice(1).join("_");
+
+    if (!user.is_superuser) {
+      const isOwner = sessionUserId === user.id;
+      const isDependent =
+        (await query<{ count: string }>(
+          `SELECT COUNT(*) as count FROM user_relationships WHERE owner_id = $1 AND dependent_id = $2`,
+          [user.id, sessionUserId]
+        ))[0]?.count !== "0";
+      if (!isOwner && !isDependent) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    }
+
+    const deleted = await query<{ id: string }>(
+      `DELETE FROM conversation_logs WHERE user_id = $1 AND DATE(created_at) = $2 RETURNING id`,
+      [sessionUserId, sessionDate]
+    );
+    return NextResponse.json({ success: true, deleted: deleted.length });
+  } catch (error) {
+    console.error("Chat messages DELETE error:", error);
+    return NextResponse.json({ error: "Failed to delete chat history" }, { status: 500 });
+  }
+}

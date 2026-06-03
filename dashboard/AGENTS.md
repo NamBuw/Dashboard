@@ -15,7 +15,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 ## Database
 - **Host:** `cts-dashboard-db` container, port `5434` (exposed), DB `ptalk_auth`
 - **Connection:** `src/lib/db.ts` — `pg.Pool` with env vars `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`
-- **Key tables:** `users`, `devices`, `products`, `conversation_logs`, `password_reset_tokens`, `roles`, `permissions`
+- **Key tables:** `users`, `devices`, `products`, `conversation_logs`, `password_reset_tokens`, `roles`, `permissions`, `banned_words`
 
 ## Chat History Integration (CloudPTalk ↔ Dashboard)
 - `conversation_logs` table is the bridge between CloudPTalk real-time pipeline and Dashboard
@@ -24,10 +24,17 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - Dashboard API: `GET /api/chat?userId=X&source=Y` — RBAC enforced
 - Dashboard UI: `/chats` page with source filter dropdown
 
+## Content Moderation Integration (CloudPTalk ↔ Dashboard)
+- `banned_words` table is the contract: Dashboard manages it, CloudPTalk enforces it.
+- **Scope:** `parent_user_id IS NULL` → global rule (admin); `= <uuid>` → per-child rule (parent). `is_active=false` rules are kept but NOT enforced.
+- **Dashboard:** `/api/banned-words` (GET/POST/PUT/DELETE) + the "Từ ngữ bị cấm" card on `/settings`. POST/PUT/DELETE enforce object-level auth (a parent may only scope to a child assigned to their own device — mirrors `/api/chat`).
+- **CloudPTalk:** `shared/moderation.py` loads `(global ∪ device's-user)` active rows (cached, ~30s TTL). Input hit → STT worker refuses the turn (skips RAG+LLM); output hit → redacted before TTS + in the persisted transcript. KidMentor only; ElderCare is not wired.
+
 ## RBAC Rules
 - **SuperAdmin (`is_superuser=true`):** Full access to all users, devices, chats, settings
 - **Non-admin:** Can only view own data + data of users assigned to their devices (`devices.owner_id` / `devices.assigned_user_id`)
-- `/users` and `/settings` pages: admin-only (middleware blocks non-superusers)
+- `middleware.ts` only enforces **authentication** (no superuser gate). `/users` and `/settings` are *intended* admin-only but are reachable by any logged-in user; gating is done in-page where needed.
+- `/settings` is intentionally shared: the banned-words card is role-aware (admin → global rules, parent → their own children); the alert/health sections are admin-oriented.
 - Basic-tier non-superusers: blocked from dashboard features → `/unauthorized`
 
 ## Pages
@@ -37,7 +44,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 | `/chats` | Login required | Chat history with sentiment + source filter |
 | `/devices` | Login required | Device management |
 | `/users` | SuperUser only | User CRUD |
-| `/settings` | SuperUser only | Alert config + health check |
+| `/settings` | Login required | Alert config + health check + banned-words moderation (role-aware) |
 | `/products/ptalk` | Login required | PTalk product page |
 | `/products/kidmentor` | Login required | Kid Mentor (mock data) |
 | `/products/eldercare` | Login required | Elder Care (mock data) |
@@ -53,6 +60,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 | `/api/users` | GET, POST, PUT, DELETE | User CRUD |
 | `/api/devices` | GET, POST, PUT | Device management |
 | `/api/chat` | GET, POST | Chat log CRUD with RBAC + source filter |
+| `/api/banned-words` | GET, POST, PUT, DELETE | Banned-words parental moderation CRUD (enforced by CloudPTalk `shared/moderation.py`) |
 
 ## Docker
 - `docker-compose.yml`: single service `dashboard-frontend`, port `4321→3000`

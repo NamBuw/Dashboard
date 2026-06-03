@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
 
     const isSuperUser = !!session.user.is_superuser;
     const currentUserId = session.user.id;
-    const { word, category, setByRole, parentUserId } = await request.json();
+    const { word, category, setByRole, parentUserId, topicId } = await request.json();
 
     if (!word || !word.trim()) {
       return NextResponse.json({ error: "Missing word" }, { status: 400 });
@@ -66,6 +66,25 @@ export async function POST(request: NextRequest) {
     const normalizedWord = word.trim().toLowerCase();
     const role = isSuperUser && setByRole === "admin" ? "admin" : "parent";
     const parentId = role === "admin" ? null : (parentUserId || currentUserId);
+
+    // Object-level authorization: a parent may only scope a rule to themselves or to a
+    // child assigned to one of their own devices (mirrors the /api/chat ownership check).
+    // Without this, a crafted parentUserId would let one parent plant banned words on any
+    // victim's account — and CloudPTalk (moderation.py) would actually enforce them.
+    if (role === "parent" && parentId !== currentUserId) {
+      const [dev] = await query<{ count: string }>(
+        `SELECT COUNT(*) AS count
+           FROM devices
+          WHERE owner_id = $1 AND assigned_user_id = $2`,
+        [currentUserId, parentId]
+      );
+      if (!dev || Number(dev.count) === 0) {
+        return NextResponse.json(
+          { error: "Forbidden - You can only set banned words for your own children" },
+          { status: 403 }
+        );
+      }
+    }
 
     // Check duplicate
     const [existing] = await query<{ id: string }>(
@@ -78,9 +97,9 @@ export async function POST(request: NextRequest) {
     }
 
     await query(
-      `INSERT INTO banned_words (word, category, set_by, set_by_role, parent_user_id)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [normalizedWord, category || "general", currentUserId, role, parentId]
+      `INSERT INTO banned_words (word, category, set_by, set_by_role, parent_user_id, topic_id)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [normalizedWord, category || "general", currentUserId, role, parentId, topicId || null]
     );
 
     return NextResponse.json({ success: true });
@@ -128,5 +147,57 @@ export async function DELETE(request: NextRequest) {
   } catch (error) {
     console.error("Banned words DELETE error:", error);
     return NextResponse.json({ error: "Failed to delete banned word" }, { status: 500 });
+  }
+}
+
+/**
+ * PUT /api/banned-words
+ * Update a banned word: toggle is_active and/or change its category.
+ * Body: { id, is_active?, category? }
+ */
+export async function PUT(request: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const isSuperUser = !!session.user.is_superuser;
+    const currentUserId = session.user.id;
+    const { id, is_active, category } = await request.json();
+
+    if (!id) {
+      return NextResponse.json({ error: "Missing id" }, { status: 400 });
+    }
+    if (is_active === undefined && category === undefined) {
+      return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+    }
+
+    const [word] = await query<{ id: string; set_by: string }>(
+      `SELECT id, set_by FROM banned_words WHERE id = $1`,
+      [id]
+    );
+
+    if (!word) {
+      return NextResponse.json({ error: "Word not found" }, { status: 404 });
+    }
+
+    if (!isSuperUser && word.set_by !== currentUserId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // COALESCE keeps the existing value when a field is not provided (null).
+    await query(
+      `UPDATE banned_words
+         SET is_active = COALESCE($2, is_active),
+             category  = COALESCE($3, category)
+       WHERE id = $1`,
+      [id, is_active ?? null, category ?? null]
+    );
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Banned words PUT error:", error);
+    return NextResponse.json({ error: "Failed to update banned word" }, { status: 500 });
   }
 }
