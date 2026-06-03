@@ -14,6 +14,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { clsx } from "clsx";
+import { BentoShell } from "@/components/bento";
 
 interface Conversation {
   id: string;
@@ -116,16 +117,10 @@ export default function PTalkProductPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div>
-        <h1 className="text-3xl font-extrabold text-foreground tracking-tight bg-gradient-to-r from-white via-gray-200 to-gray-500 bg-clip-text text-transparent">
-          Robot PTalk Assistant Insight
-        </h1>
-        <p className="text-muted text-sm mt-1">
-          Giám sát sơ đồ mapping và phân tích sắc thái nội dung đối thoại (Conversation sentiment logs) lưu trữ trong PostgreSQL.
-        </p>
-      </div>
+    <BentoShell
+      title="Robot PTalk Assistant Insight"
+      sub="Giám sát mapping robot↔user và phân tích sắc thái hội thoại lưu trữ trong PostgreSQL"
+    >
 
       {/* Sơ đồ Mapping Owner ↔ Robot ↔ User */}
       <div className="glass-card rounded-2xl p-5">
@@ -318,7 +313,7 @@ export default function PTalkProductPage() {
         </div>
 
       </div>
-    </div>
+    </BentoShell>
   );
 }
 

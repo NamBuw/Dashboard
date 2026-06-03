@@ -21,6 +21,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { clsx } from "clsx";
+import { BentoShell } from "@/components/bento";
 
 interface ApiUser {
   id: string;
@@ -254,20 +255,14 @@ export default function UsersPage() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-extrabold text-foreground tracking-tight bg-gradient-to-r from-white via-gray-200 to-gray-500 bg-clip-text text-transparent">
-            Quản lý Người dùng
-          </h1>
-          <p className="text-muted text-sm mt-1">
-            Hệ thống Unified Identity tích hợp xuyên suốt sản phẩm ({pagination.total} tài khoản).
-          </p>
-        </div>
+    <BentoShell
+      title="Quản lý Người dùng"
+      sub={`Hệ thống Unified Identity tích hợp xuyên suốt sản phẩm · ${pagination.total} tài khoản`}
+    >
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <button
           onClick={() => setIsAddModalOpen(true)}
-          className="px-4 py-2.5 bg-accent hover:bg-accent-hover text-white text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-[0_0_12px_rgba(6,182,212,0.15)] align-self-start sm:align-self-center animate-in fade-in duration-300"
+          className="px-4 py-2.5 bg-accent hover:bg-accent-hover text-white text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5"
         >
           <UserPlus size={14} />
           Thêm User Mới
@@ -860,6 +855,6 @@ export default function UsersPage() {
           </div>
         </div>
       )}
-    </div>
+    </BentoShell>
   );
 }

@@ -7,6 +7,7 @@ import { BrowseListView } from "@/components/kg/BrowseListView";
 import { BrowseGraphView } from "@/components/kg/BrowseGraphView";
 import { ChunkDetailPanel } from "@/components/kg/ChunkDetailPanel";
 import { RefreshButton } from "@/components/kg/RefreshButton";
+import { BentoShell, BentoOuter } from "@/components/bento";
 import type { BrowseResponse, BrowseItem, GraphNode } from "@/lib/kg-types";
 
 export interface FilterState {
@@ -75,35 +76,58 @@ export default function BrowsePage() {
   };
 
   return (
-    <div className="flex h-full min-h-[70vh]">
-      <FilterSidebar filter={filter} onChange={setFilter} />
-      <main className="flex-1 flex flex-col min-w-0">
-        <div className="flex items-center justify-between gap-3 p-4 border-b border-border flex-wrap">
-          <Breadcrumb crumbs={data?.breadcrumb ?? []} onJump={jumpToCrumb} />
-          <div className="flex gap-2 items-center">
-            <ViewToggle value={view} onChange={setView} />
-            <RefreshButton onClick={fetchData} lastFetchedAt={data?.cachedAt} loading={loading} />
+    <BentoShell title="Kho tri thức" sub="Duyệt đồ thị Neo4j theo cấp · bộ → môn → lớp → bài → chunk">
+      <BentoOuter>
+        <div className="bento-inner" style={{ padding: 0, display: "flex", minHeight: "60vh" }}>
+          <div style={{ width: 260, borderRight: "1px solid var(--line)", flex: "none", overflowY: "auto" }}>
+            <FilterSidebar filter={filter} onChange={setFilter} />
           </div>
-        </div>
-        <div className="flex-1 overflow-auto p-4">
-          {error ? (
-            <div className="rounded-lg border border-danger/40 bg-danger/10 text-danger px-4 py-3 text-sm">
-              {error}
+          <main style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                padding: 16,
+                borderBottom: "1px solid var(--line)",
+                flexWrap: "wrap",
+              }}
+            >
+              <Breadcrumb crumbs={data?.breadcrumb ?? []} onJump={jumpToCrumb} />
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <ViewToggle value={view} onChange={setView} />
+                <RefreshButton onClick={fetchData} lastFetchedAt={data?.cachedAt} loading={loading} />
+              </div>
             </div>
-          ) : loading && !data ? (
-            <div className="text-muted">Đang tải...</div>
-          ) : (data?.items ?? []).length === 0 ? (
-            <div className="text-muted">Không có dữ liệu trong scope này</div>
-          ) : view === "list" ? (
-            <BrowseListView items={data!.items} level={data!.level} onClick={drillInto} />
-          ) : (
-            <BrowseGraphView graph={data!.graph} onNodeClick={drillIntoGraphNode} />
-          )}
+            <div style={{ flex: 1, overflow: "auto", padding: 16 }}>
+              {error ? (
+                <div style={{
+                  borderRadius: 12,
+                  border: "1px solid color-mix(in srgb, var(--red) 30%, transparent)",
+                  background: "color-mix(in srgb, var(--red) 12%, var(--inner))",
+                  color: "var(--red)",
+                  padding: "12px 16px",
+                  fontSize: 13,
+                }}>
+                  {error}
+                </div>
+              ) : loading && !data ? (
+                <div style={{ color: "var(--muted)", fontSize: 13 }}>Đang tải...</div>
+              ) : (data?.items ?? []).length === 0 ? (
+                <div style={{ color: "var(--muted)", fontSize: 13 }}>Không có dữ liệu trong scope này</div>
+              ) : view === "list" ? (
+                <BrowseListView items={data!.items} level={data!.level} onClick={drillInto} />
+              ) : (
+                <BrowseGraphView graph={data!.graph} onNodeClick={drillIntoGraphNode} />
+              )}
+            </div>
+          </main>
         </div>
-      </main>
+      </BentoOuter>
       {selectedChunkUid && (
         <ChunkDetailPanel uid={selectedChunkUid} onClose={() => setSelectedChunkUid(null)} />
       )}
-    </div>
+    </BentoShell>
   );
 }

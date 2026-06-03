@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Clock,
 } from "lucide-react";
+import { BentoShell } from "@/components/bento";
 
 interface Medication {
   id: string;
@@ -38,17 +39,10 @@ export default function ElderKareProductPage() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div>
-        <h1 className="text-3xl font-extrabold text-foreground tracking-tight bg-gradient-to-r from-white via-gray-200 to-gray-500 bg-clip-text text-transparent">
-          Báo cáo Elder Care App
-        </h1>
-        <p className="text-muted text-sm mt-1">
-          Theo dõi lịch nhắc uống thuốc của người cao tuổi, lịch sử xác nhận và các cảnh báo hành vi sức khỏe khẩn cấp.
-        </p>
-      </div>
-
+    <BentoShell
+      title="Báo cáo Elder Care"
+      sub="Theo dõi lịch nhắc uống thuốc của người cao tuổi và các cảnh báo sức khỏe khẩn cấp"
+    >
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Medication Schedule List Column-span-2 */}
@@ -134,6 +128,6 @@ export default function ElderKareProductPage() {
         </div>
 
       </div>
-    </div>
+    </BentoShell>
   );
 }

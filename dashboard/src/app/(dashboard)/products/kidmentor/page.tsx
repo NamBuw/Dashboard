@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { BookOpen, Search, Loader2, FileText, Sparkles } from "lucide-react";
+import { Search, Loader2, FileText, Sparkles } from "lucide-react";
+import { BentoShell } from "@/components/bento";
 
 interface RagResult {
   query: string;
@@ -58,18 +59,10 @@ export default function KidMentorPage() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-          <BookOpen size={24} className="text-accent" />
-          Kid Mentor - Tra cứu Sách
-        </h1>
-        <p className="text-sm text-muted mt-1">
-          Tìm kiếm kiến thức từ kho sách giáo khoa, bài thơ, bài học
-        </p>
-      </div>
-
+    <BentoShell
+      title="Kid Mentor — Tra cứu sách"
+      sub="Tìm kiếm kiến thức từ kho sách giáo khoa, bài thơ, bài học"
+    >
       {/* Search */}
       <div className="glass-card rounded-xl p-4">
         <div className="flex gap-2">
@@ -187,6 +180,6 @@ export default function KidMentorPage() {
           </div>
         </div>
       )}
-    </div>
+    </BentoShell>
   );
 }

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { clsx } from "clsx";
 import { useSession } from "next-auth/react";
+import { BentoShell } from "@/components/bento";
 
 interface SystemService {
   name: string;
@@ -198,17 +199,10 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div>
-        <h1 className="text-3xl font-extrabold text-foreground tracking-tight bg-gradient-to-r from-white via-gray-200 to-gray-500 bg-clip-text text-transparent">
-          Cài đặt & Giám sát Hệ thống
-        </h1>
-        <p className="text-muted text-sm mt-1">
-          Cấu hình quy tắc cảnh báo sự cố và giám sát sức khỏe dịch vụ thời gian thực (System status latency).
-        </p>
-      </div>
-
+    <BentoShell
+      title="Cài đặt & Giám sát Hệ thống"
+      sub="Cấu hình quy tắc cảnh báo sự cố và giám sát sức khỏe dịch vụ thời gian thực"
+    >
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Settings Form Column-span-2 */}
@@ -544,6 +538,6 @@ export default function SettingsPage() {
           ))}
         </div>
       </div>
-    </div>
+    </BentoShell>
   );
 }

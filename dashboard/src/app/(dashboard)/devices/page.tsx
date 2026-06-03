@@ -18,6 +18,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { clsx } from "clsx";
+import { BentoShell } from "@/components/bento";
 
 interface Device {
   id: string;
@@ -207,20 +208,13 @@ export default function DevicesPage() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-extrabold text-foreground tracking-tight bg-gradient-to-r from-white via-gray-200 to-gray-500 bg-clip-text text-transparent">
-            Quản lý Thiết bị Robot
-          </h1>
-          <p className="text-muted text-sm mt-1">
-            Theo dõi, gán người dùng & nâng cấp Firmware (OTA) robot PTalk Assistant.
-          </p>
-        </div>
-        
+    <BentoShell
+      title="Quản lý Thiết bị Robot"
+      sub="Theo dõi, gán người dùng & nâng cấp Firmware (OTA) robot PTalk Assistant"
+    >
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
         {/* Simulate Adding Device */}
-        <button 
+        <button
           onClick={handleRegisterDevice}
           className="px-4 py-2.5 bg-accent hover:bg-accent-hover text-white text-xs font-bold rounded-xl flex items-center gap-2 transition-all cursor-pointer shadow-lg glow-accent"
         >
@@ -619,6 +613,6 @@ export default function DevicesPage() {
           </div>
         </div>
       )}
-    </div>
+    </BentoShell>
   );
 }
