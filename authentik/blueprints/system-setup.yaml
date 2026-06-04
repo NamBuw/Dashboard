@@ -341,3 +341,33 @@ entries:
       slug: dashboard
     attrs:
       provider: !KeyOf provider-dashboard
+
+  # 4.4 P-Talk Signature (mobile, dual-mode Kid Mentor / Elder Care — one client covers both)
+  - model: authentik_providers_oauth2.oauth2provider
+    id: provider-ptalk-signature
+    state: present
+    identifiers:
+      name: Provider P-Talk Signature
+    attrs:
+      client_id: ptalk-signature-client
+      client_secret: ptalk-signature-secret-key
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      enrollment_flow: !KeyOf flow-enrollment
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
+        - !KeyOf scope-roles
+        - !KeyOf scope-user-type
+        - !KeyOf scope-assigned-products
+      redirect_uris: "app://ptalksignature/callback"
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Default Keypair]]
+
+  - model: authentik_core.application
+    id: app-ptalk-signature
+    state: present
+    identifiers:
+      name: P-Talk Signature App
+      slug: ptalk-signature
+    attrs:
+      provider: !KeyOf provider-ptalk-signature
