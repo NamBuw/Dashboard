@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { X, ExternalLink } from "lucide-react";
+import { X } from "lucide-react";
 
 const SUBJECT_LABELS: Record<string, string> = {
   toan: "Toán", ngu_van: "Ngữ văn", khtn: "KHTN", tieng_viet: "Tiếng Việt",
@@ -67,7 +67,6 @@ export function DrillDownTable({ cell, onClose }: Props) {
                   <th className="py-2 pr-2">Tiêu đề</th>
                   <th className="py-2 px-2 whitespace-nowrap">Bài</th>
                   <th className="py-2 px-2 whitespace-nowrap">Trang</th>
-                  <th className="py-2 px-2 whitespace-nowrap">Nguồn</th>
                   <th className="py-2 pl-2 text-right whitespace-nowrap">Ký tự</th>
                 </tr>
               </thead>
@@ -79,13 +78,6 @@ export function DrillDownTable({ cell, onClose }: Props) {
                     </td>
                     <td className="py-2 px-2 text-muted">{r.lesson_no ?? "-"}</td>
                     <td className="py-2 px-2 text-muted">{r.trang_no ?? "-"}</td>
-                    <td className="py-2 px-2 text-muted">
-                      {r.source_url ? (
-                        <a href={r.source_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-accent hover:underline">
-                          {r.source_name ?? "link"} <ExternalLink size={12} />
-                        </a>
-                      ) : (r.source_name ?? "-")}
-                    </td>
                     <td className="py-2 pl-2 text-right text-muted">{r.text_length?.toLocaleString() ?? "-"}</td>
                   </tr>
                 ))}

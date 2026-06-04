@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, type ReactNode } from "react";
-import { X, ExternalLink } from "lucide-react";
+import { X } from "lucide-react";
 
 interface ChunkDetail {
   uid: string; title?: string; text?: string;
@@ -47,7 +47,6 @@ export function ChunkDetailPanel({ uid, onClose }: Props) {
     ["Bộ sách", data.bo_sach ?? "-"],
     ["Bài", data.lesson_no ?? "-"],
     ["Trang", data.trang_no ?? "-"],
-    ["Nguồn", data.source_name ?? "-"],
     ["Số ký tự", data.text_length?.toLocaleString() ?? "-"],
     ["Trạng thái", data.production_ready ? "Đang dùng" : `Bị loại${data.demote_reason ? ` (${data.demote_reason})` : ""}`],
   ] : [];
@@ -70,13 +69,12 @@ export function ChunkDetailPanel({ uid, onClose }: Props) {
           ) : data ? (
             <>
               <div className="text-base font-medium text-foreground">{data.title ?? "(không tiêu đề)"}</div>
-              {(data.concepts?.length || data.work || data.section_type || data.variant || data.content_class) && (
+              {(data.concepts?.length || data.work || data.section_type || data.variant) && (
                 <div className="flex flex-wrap gap-1.5">
                   {data.work && <span className="text-[11px] px-2 py-0.5 rounded bg-purple/15 text-purple">📖 {data.work}</span>}
                   {data.concepts?.map((c) => <span key={c} className="text-[11px] px-2 py-0.5 rounded bg-accent/15 text-accent">🧠 {c}</span>)}
                   {data.section_type && <span className="text-[11px] px-2 py-0.5 rounded bg-purple/15 text-purple">{data.section_type}</span>}
                   {data.variant && <span className="text-[11px] px-2 py-0.5 rounded bg-surface text-muted">{data.variant}</span>}
-                  {data.content_class && <span className="text-[11px] px-2 py-0.5 rounded bg-surface text-muted">{data.content_class}</span>}
                 </div>
               )}
               <table className="w-full text-sm">
@@ -89,12 +87,6 @@ export function ChunkDetailPanel({ uid, onClose }: Props) {
                   ))}
                 </tbody>
               </table>
-              {data.source_url && (
-                <a href={data.source_url} target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-sm text-accent hover:underline">
-                  <ExternalLink size={14} /> Mở nguồn
-                </a>
-              )}
               {data.text && (
                 <div>
                   <div className="text-xs text-muted mb-1">Nội dung</div>

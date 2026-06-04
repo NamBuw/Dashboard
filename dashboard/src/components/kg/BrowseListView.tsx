@@ -28,9 +28,7 @@ export function BrowseListView({ items, level, onClick }: { items: BrowseItem[];
                 <div className="text-xs text-muted mt-1 flex flex-wrap gap-1.5 items-center">
                   {it.meta?.section_type && <Badge tone="purple">{it.meta.section_type}</Badge>}
                   {it.meta?.variant && <Badge>{it.meta.variant}</Badge>}
-                  {it.meta?.content_class && <Badge tone="accent">{it.meta.content_class}</Badge>}
                   {it.meta?.trang_no != null && <span>trang {it.meta.trang_no}</span>}
-                  {it.meta?.source_name && <span>· {it.meta.source_name}</span>}
                 </div>
               </div>
               <div className="text-xs text-muted shrink-0">{it.count.toLocaleString()} ký tự</div>
