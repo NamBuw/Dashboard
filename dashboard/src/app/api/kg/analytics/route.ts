@@ -41,12 +41,22 @@ export async function GET(req: NextRequest) {
             MATCH (k:KnowledgeChunk) WHERE coalesce(k.production_ready,false)=true
             RETURN coalesce(k.bo_sach,'NONE') AS bo_sach, count(*) AS cnt ORDER BY cnt DESC`);
         const ftIdx = await s.run(`SHOW INDEXES YIELD name, type, state WHERE type='FULLTEXT' AND state='ONLINE' RETURN collect(name) AS indexes`);
+        // schema v3 metrics (tuần tự)
+        const conceptCount = await s.run(`MATCH (c:Concept) RETURN count(c) AS n`);
+        const workCount = await s.run(`MATCH (w:LiteraryWork) RETURN count(w) AS n`);
+        const coversCount = await s.run(`MATCH (:KnowledgeChunk)-[:COVERS]->() RETURN count(*) AS n`);
+        const conceptCov = await s.run(`MATCH (k:KnowledgeChunk) WHERE coalesce(k.production_ready,false)=true
+          RETURN count(k) AS total, sum(CASE WHEN (k)-[:COVERS]->() THEN 1 ELSE 0 END) AS with_c`);
+        const conceptsBySubj = await s.run(`MATCH (c:Concept) WHERE c.subject IS NOT NULL
+          RETURN c.subject AS subject, count(*) AS concepts ORDER BY concepts DESC`);
 
         const t = totals.records[0];
         const total_kc = t.get("total_kc");
         const total_prod = t.get("total_prod");
         const with_lesson_no = t.get("with_lesson_no");
         const with_trang_no = t.get("with_trang_no");
+        const cov = conceptCov.records[0];
+        const cov_total = cov.get("total"); const cov_with = cov.get("with_c");
 
         const cells: Cell[] = heatmap.records.map((r) => ({
           subject: r.get("subject"), grade: r.get("grade"), count: r.get("cnt"),
@@ -60,10 +70,15 @@ export async function GET(req: NextRequest) {
             lesson_no_coverage_pct: total_prod ? Math.round((with_lesson_no / total_prod) * 1000) / 10 : 0,
             trang_no_coverage_pct: total_prod ? Math.round((with_trang_no / total_prod) * 1000) / 10 : 0,
             fulltext_indexes_online: ftIdx.records[0].get("indexes"),
+            concepts: conceptCount.records[0].get("n"),
+            works: workCount.records[0].get("n"),
+            covers_edges: coversCount.records[0].get("n"),
+            concept_coverage_pct: cov_total ? Math.round((cov_with / cov_total) * 1000) / 10 : 0,
           },
           heatmap: { subjects, grades, cells },
           demoteReasons: demote.records.map((r) => ({ reason: r.get("reason"), count: r.get("cnt") })),
           boSachDistribution: books.records.map((r) => ({ bo_sach: r.get("bo_sach"), count: r.get("cnt") })),
+          conceptsBySubject: conceptsBySubj.records.map((r) => ({ subject: r.get("subject"), concepts: r.get("concepts") })),
         };
       });
     });

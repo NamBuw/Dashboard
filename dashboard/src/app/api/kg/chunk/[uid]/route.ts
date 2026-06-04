@@ -15,19 +15,26 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ uid:
       const r = await s.run(`
         MATCH (k:KnowledgeChunk {uid: $uid})
         OPTIONAL MATCH (lg:LessonGuide)-[:HAS_CHUNK]->(k)
-        RETURN k, lg.title AS parent_lesson_guide_title, lg.url AS parent_lesson_guide_url`,
+        OPTIONAL MATCH (k)-[:COVERS]->(c:Concept)
+        OPTIONAL MATCH (k)-[:ABOUT_WORK]->(w:LiteraryWork)
+        RETURN k, lg.title AS parent_lesson_guide_title, lg.url AS parent_lesson_guide_url,
+               collect(DISTINCT c.name) AS concepts, w.name AS work`,
         { uid });
       if (r.records.length === 0) return null;
-      const k = r.records[0].get("k").properties;
+      const rec = r.records[0];
+      const k = rec.get("k").properties;
       return {
         uid: k.uid, title: k.title, text: k.text,
         subject_code: k.subject_code, grade: k.grade, bo_sach: k.bo_sach,
         lesson_no: k.lesson_no, trang_no: k.trang_no,
         source_name: k.source_name, source_url: k.source_url,
         production_ready: k.production_ready, demote_reason: k.demote_reason,
+        content_class: k.content_class, section_type: k.section_type, variant: k.variant,
+        concepts: (rec.get("concepts") as string[] | null)?.filter(Boolean) ?? [],
+        work: rec.get("work"),
         text_length: (k.text ?? "").length,
-        parent_lesson_guide_title: r.records[0].get("parent_lesson_guide_title"),
-        parent_lesson_guide_url: r.records[0].get("parent_lesson_guide_url"),
+        parent_lesson_guide_title: rec.get("parent_lesson_guide_title"),
+        parent_lesson_guide_url: rec.get("parent_lesson_guide_url"),
       };
     });
     if (!result) return NextResponse.json({ error: "Not found" }, { status: 404 });

@@ -8,6 +8,8 @@ interface ChunkDetail {
   lesson_no?: number; trang_no?: number;
   source_name?: string; source_url?: string;
   production_ready?: boolean; demote_reason?: string;
+  content_class?: string; section_type?: string; variant?: string;
+  concepts?: string[]; work?: string;
   text_length?: number;
   parent_lesson_guide_title?: string; parent_lesson_guide_url?: string;
 }
@@ -68,6 +70,15 @@ export function ChunkDetailPanel({ uid, onClose }: Props) {
           ) : data ? (
             <>
               <div className="text-base font-medium text-foreground">{data.title ?? "(không tiêu đề)"}</div>
+              {(data.concepts?.length || data.work || data.section_type || data.variant || data.content_class) && (
+                <div className="flex flex-wrap gap-1.5">
+                  {data.work && <span className="text-[11px] px-2 py-0.5 rounded bg-purple/15 text-purple">📖 {data.work}</span>}
+                  {data.concepts?.map((c) => <span key={c} className="text-[11px] px-2 py-0.5 rounded bg-accent/15 text-accent">🧠 {c}</span>)}
+                  {data.section_type && <span className="text-[11px] px-2 py-0.5 rounded bg-purple/15 text-purple">{data.section_type}</span>}
+                  {data.variant && <span className="text-[11px] px-2 py-0.5 rounded bg-surface text-muted">{data.variant}</span>}
+                  {data.content_class && <span className="text-[11px] px-2 py-0.5 rounded bg-surface text-muted">{data.content_class}</span>}
+                </div>
+              )}
               <table className="w-full text-sm">
                 <tbody>
                   {rows.map(([k, v]) => (

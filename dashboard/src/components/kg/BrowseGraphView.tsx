@@ -22,7 +22,7 @@ export function BrowseGraphView({ graph, onNodeClick }: Props) {
       if (destroyed || !ref.current) return;
       const data: Data = {
         nodes: graph.nodes as VisNode[],
-        edges: graph.edges.map((e) => ({ ...e })) as VisEdge[],
+        edges: graph.edges.map((e) => ({ from: e.from, to: e.to, dashes: e.dashes ?? false })) as VisEdge[],
       };
       net = new Network(ref.current, data, {
         nodes: { shape: "dot", font: { size: 14, color: "#e5e7eb" }, borderWidth: 2 },
@@ -41,8 +41,11 @@ export function BrowseGraphView({ graph, onNodeClick }: Props) {
           bo_sach: { color: { background: "#3b82f6", border: "#2563eb" } },
           subject: { color: { background: "#10b981", border: "#059669" } },
           grade: { color: { background: "#f59e0b", border: "#d97706" } },
-          lesson: { color: { background: "#ec4899", border: "#db2777" } },
-          chunk: { color: { background: "#a78bfa", border: "#8b5cf6" } },
+          lesson: { color: { background: "#38bdf8", border: "#0ea5e9" } },
+          concept: { color: { background: "#a78bfa", border: "#8b5cf6" } },
+          work: { color: { background: "#ec4899", border: "#db2777" } },
+          section: { color: { background: "#f472b6", border: "#ec4899" } },
+          chunk: { color: { background: "#94a3b8", border: "#64748b" } },
         },
         interaction: { hover: true, tooltipDelay: 200 },
       });
