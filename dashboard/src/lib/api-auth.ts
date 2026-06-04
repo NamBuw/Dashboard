@@ -4,9 +4,19 @@ import { query } from "./db";
 const AUTHENTIK_JWKS_URI =
   process.env.AUTHENTIK_JWKS_URI ||
   "https://auth.ctslab.net/application/o/p-assistant/jwks/";
-const AUTHENTIK_ISSUER =
-  process.env.AUTHENTIK_ISSUER ||
-  "https://auth.ctslab.net/application/o/p-assistant/";
+
+// Mobile apps authenticate against their OWN Authentik applications, so a mobile token's
+// `iss` is the app issuer (.../o/p-assistant/, .../o/kid-mentor/) — NOT the Dashboard
+// web-login issuer in process.env.AUTHENTIK_ISSUER (.../o/dashboard/). Verifying mobile
+// Bearer tokens against that web issuer rejects every one with "unexpected iss". Accept
+// the known mobile-app issuers instead (override via AUTHENTIK_MOBILE_ISSUERS, comma-sep).
+const MOBILE_ISSUERS = (
+  process.env.AUTHENTIK_MOBILE_ISSUERS ||
+  "https://auth.ctslab.net/application/o/p-assistant/,https://auth.ctslab.net/application/o/kid-mentor/"
+)
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 // Cache the JWKS to avoid fetching on every request.
 // jose handles cache-control headers and refreshes automatically.
@@ -37,9 +47,9 @@ export async function verifyBearerToken(
   const token = authHeader.substring(7);
 
   try {
-    // Verify JWT signature, issuer, and extract claims
+    // Verify signature against Authentik's JWKS and accept any known mobile-app issuer.
     const { payload } = await jwtVerify(token, getJWKS(), {
-      issuer: AUTHENTIK_ISSUER,
+      issuer: MOBILE_ISSUERS,
     });
 
     const authentikUserId = payload.sub;
@@ -92,7 +102,7 @@ export async function verifyBearerToken(
 
     return newUser;
   } catch (err) {
-    // Log verification failures for debugging (not for forged tokens - those are expected)
+    // Invalid/expired token or provisioning error → treat as unauthenticated.
     if (process.env.NODE_ENV === "development") {
       console.error("Bearer token verification failed:", err);
     }
