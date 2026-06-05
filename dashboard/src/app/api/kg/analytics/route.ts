@@ -49,6 +49,14 @@ export async function GET(req: NextRequest) {
           RETURN count(k) AS total, sum(CASE WHEN (k)-[:COVERS]->() THEN 1 ELSE 0 END) AS with_c`);
         const conceptsBySubj = await s.run(`MATCH (c:Concept) WHERE c.subject IS NOT NULL
           RETURN c.subject AS subject, count(*) AS concepts ORDER BY concepts DESC`);
+        // lớp document thô + recitation — count(n) theo label dùng count-store (instant kể cả 1M)
+        const cbN = await s.run(`MATCH (n:ContentBlock) RETURN count(n) AS n`);
+        const secN = await s.run(`MATCH (n:Section) RETURN count(n) AS n`);
+        const fdN = await s.run(`MATCH (n:FullDocument) RETURN count(n) AS n`);
+        const unitN = await s.run(`MATCH (n:Unit) RETURN count(n) AS n`);
+        const lgN = await s.run(`MATCH (n:LessonGuide) RETURN count(n) AS n`);
+        const litN = await s.run(`MATCH (n:LiteratureText) RETURN count(n) AS n`);
+        const reciteW = await s.run(`MATCH (:LiteratureText)-[:VERBATIM_OF]->(w:LiteraryWork) RETURN count(DISTINCT w) AS n`);
 
         const t = totals.records[0];
         const total_kc = t.get("total_kc");
@@ -74,6 +82,13 @@ export async function GET(req: NextRequest) {
             works: workCount.records[0].get("n"),
             covers_edges: coversCount.records[0].get("n"),
             concept_coverage_pct: cov_total ? Math.round((cov_with / cov_total) * 1000) / 10 : 0,
+            content_blocks: cbN.records[0].get("n"),
+            sections: secN.records[0].get("n"),
+            full_documents: fdN.records[0].get("n"),
+            units: unitN.records[0].get("n"),
+            lesson_guides: lgN.records[0].get("n"),
+            literature_texts: litN.records[0].get("n"),
+            recite_works: reciteW.records[0].get("n"),
           },
           heatmap: { subjects, grades, cells },
           demoteReasons: demote.records.map((r) => ({ reason: r.get("reason"), count: r.get("cnt") })),

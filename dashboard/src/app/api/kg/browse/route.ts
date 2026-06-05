@@ -164,6 +164,8 @@ async function queryItems(s: Session, level: BrowseLevel, p: P): Promise<BrowseI
              collect(DISTINCT k.section_type) AS sections, collect(DISTINCT k.variant) AS variants
       ORDER BY work`,
       { bo_sach: p.bo_sach, grade: parseInt(p.grade as string, 10) });
+    const recite = await s.run(`MATCH (:LiteratureText)-[:VERBATIM_OF]->(w:LiteraryWork) RETURN collect(DISTINCT w.name) AS works`);
+    const reciteSet = new Set((recite.records[0]?.get("works") as string[] | null) ?? []);
     return r.records.map((rec) => ({
       kind: "L4a_work" as const, id: rec.get("work"),
       label: rec.get("work"), count: rec.get("chunks"),
@@ -171,6 +173,7 @@ async function queryItems(s: Session, level: BrowseLevel, p: P): Promise<BrowseI
         work: rec.get("work"),
         sections: (rec.get("sections") as string[] | null)?.filter(Boolean) ?? [],
         variants: (rec.get("variants") as string[] | null)?.filter(Boolean) ?? [],
+        has_recitation: reciteSet.has(rec.get("work")),
       },
     }));
   }
@@ -184,11 +187,21 @@ async function queryItems(s: Session, level: BrowseLevel, p: P): Promise<BrowseI
              size(coalesce(k.text,'')) AS len
       ORDER BY section, variant`,
       { bo_sach: p.bo_sach, grade: parseInt(p.grade as string, 10), work: p.work });
-    return r.records.map((rec) => ({
+    const items: BrowseItem[] = r.records.map((rec) => ({
       kind: "L4b_section" as const, id: rec.get("uid"),
       label: rec.get("title") ?? rec.get("uid"), count: rec.get("len"),
       meta: { title: rec.get("title"), section_type: rec.get("section"), variant: rec.get("variant"), is_chunk: true },
     }));
+    // prepend bản đọc nguyên văn nếu có (VERBATIM_OF)
+    const lt = await s.run(`MATCH (lt:LiteratureText)-[:VERBATIM_OF]->(w:LiteraryWork {name:$work})
+      RETURN lt.title AS title LIMIT 1`, { work: p.work });
+    if (lt.records.length) {
+      items.unshift({
+        kind: "L4b_section", id: `recite:${p.work}`, label: "📜 Đọc nguyên văn", count: 0,
+        meta: { is_chunk: true, recitation: true, title: `📜 Đọc nguyên văn: ${lt.records[0].get("title") ?? p.work}` },
+      });
+    }
+    return items;
   }
   // ── L5_chunk: Chunks dưới Concept (Toán/KHTN/Sử/Địa/GDCD) hoặc dưới Bài (TV) ──
   if (level === "L5_chunk") {

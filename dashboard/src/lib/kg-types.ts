@@ -33,6 +33,8 @@ export interface BrowseItem {
     sections?: string[];       // Văn: các section_type của 1 tác phẩm
     variants?: string[];       // Văn: các variant
     prereq?: string[];         // Toán: chuỗi tiên quyết
+    has_recitation?: boolean;  // Văn: tác phẩm có bản đọc nguyên văn
+    recitation?: boolean;      // item là bản recitation (LiteratureText)
     is_chunk?: boolean;        // true → click mở ChunkDetailPanel thay vì drill
   };
 }
@@ -80,6 +82,14 @@ export interface AnalyticsResponse {
     works: number;
     covers_edges: number;
     concept_coverage_pct: number;
+    // lớp document thô + recitation (khoe quy mô)
+    content_blocks: number;
+    sections: number;
+    full_documents: number;
+    units: number;
+    lesson_guides: number;
+    literature_texts: number;
+    recite_works: number;
   };
   heatmap: {
     subjects: string[];

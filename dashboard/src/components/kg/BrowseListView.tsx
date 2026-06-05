@@ -23,8 +23,7 @@ export function BrowseListView({ items, level, onClick }: { items: BrowseItem[];
             className="w-full text-left p-4 bg-card border border-border rounded-lg hover:border-accent transition-colors">
             <div className="flex justify-between items-start gap-4">
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-mono text-muted truncate">{it.id.slice(0, 60)}</div>
-                <div className="text-base mt-1 font-medium text-foreground">{it.meta?.title ?? it.label}</div>
+                <div className="text-base font-medium text-foreground">{it.meta?.title ?? it.label}</div>
                 <div className="text-xs text-muted mt-1 flex flex-wrap gap-1.5 items-center">
                   {it.meta?.section_type && <Badge tone="purple">{it.meta.section_type}</Badge>}
                   {it.meta?.variant && <Badge>{it.meta.variant}</Badge>}
@@ -56,9 +55,9 @@ export function BrowseListView({ items, level, onClick }: { items: BrowseItem[];
               {it.meta.sections.slice(0, 4).map((s) => <Badge key={s} tone="purple">{s}</Badge>)}
             </div>
           )}
-          <div className="text-xs text-muted mt-2 flex items-center gap-2">
+          <div className="text-xs text-muted mt-2 flex items-center gap-2 flex-wrap">
             <span>{it.count.toLocaleString()} {level === "L3_lesson" || level === "L4_concept" ? "chunk" : "mục"}</span>
-            {it.meta?.has_vietjack && <span className="text-warning">⭐</span>}
+            {it.meta?.has_recitation && <Badge tone="purple">📜 đọc thuộc</Badge>}
           </div>
         </button>
       ))}

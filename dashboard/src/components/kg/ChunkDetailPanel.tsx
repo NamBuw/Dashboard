@@ -41,7 +41,6 @@ export function ChunkDetailPanel({ uid, onClose }: Props) {
   }, [uid]);
 
   const rows: [string, ReactNode][] = data ? [
-    ["UID", <span key="u" className="font-mono text-xs break-all">{data.uid}</span>],
     ["Môn", data.subject_code ?? "-"],
     ["Lớp", data.grade ?? "-"],
     ["Bộ sách", data.bo_sach ?? "-"],

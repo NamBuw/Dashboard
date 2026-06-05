@@ -94,6 +94,21 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
+      {/* Quy mô kho tài liệu (lớp document thô + recitation) */}
+      <div className="bg-card border border-border rounded-2xl p-5">
+        <h2 className="text-sm font-bold text-foreground mb-1">📚 Quy mô kho tài liệu</h2>
+        <p className="text-xs text-muted mb-4">Toàn bộ tài liệu giáo dục đã thu thập & băm nhỏ (nền cho tìm kiếm ngữ nghĩa).</p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard label="Khối nội dung (ContentBlock)" value={t?.content_blocks} accent />
+          <StatCard label="Tài liệu đầy đủ" value={t?.full_documents} />
+          <StatCard label="Đơn vị bài học (Unit)" value={t?.units} />
+          <StatCard label="Mục (Section)" value={t?.sections} />
+          <StatCard label="Hướng dẫn bài (LessonGuide)" value={t?.lesson_guides} />
+          <StatCard label="📜 Bản nguyên văn" value={t?.literature_texts} />
+          <StatCard label="📜 Tác phẩm đọc thuộc" value={t?.recite_works} />
+        </div>
+      </div>
+
       {/* Bản đồ tri thức (showcase tĩnh, self-contained) */}
       <div className="bg-card border border-border rounded-2xl p-5">
         <h2 className="text-sm font-bold text-foreground mb-1">Bản đồ Tri thức — tổng quan</h2>
