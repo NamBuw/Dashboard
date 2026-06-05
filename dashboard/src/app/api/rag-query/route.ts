@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 
-const RAG_SERVER_URL = process.env.RAG_SERVER_URL || "http://171.226.10.121:8888";
+// Trỏ THẲNG Gemma-4 (không qua RAG nữa). Giải thích nhanh, max_tokens ngắn.
+const LLM_URL = process.env.LLM_API_URL || "http://171.226.10.121:8000/llm/v1/chat/completions";
+const LLM_MODEL = process.env.LLM_MODEL || "gemma-4";
+const LLM_KEY = process.env.LLM_API_KEY || "";
+const LLM_MAX_TOKENS = parseInt(process.env.LLM_MAX_TOKENS || "256", 10);
 
 /**
  * POST /api/rag-query
- * Query the RAG server for book/knowledge results.
- * Body: { query: string, sessionId?: string }
+ * Hỏi nhanh Gemma-4 (giải thích ngắn gọn). Body: { query: string }
  */
 export async function POST(request: NextRequest) {
   try {
@@ -15,67 +18,54 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { query, sessionId } = await request.json();
-
+    const { query } = await request.json();
     if (!query || !query.trim()) {
       return NextResponse.json({ error: "Missing query" }, { status: 400 });
     }
 
-    // Call RAG server
-    const ragResponse = await fetch(`${RAG_SERVER_URL}/v2/rag/retrieve`, {
+    const llmRes = await fetch(LLM_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${LLM_KEY}`,
+      },
       body: JSON.stringify({
-        query: query.trim(),
-        session_id: sessionId || "dashboard",
-        user_profile: {
-          username: session.user.name,
-          user_id: session.user.id,
-        },
+        model: LLM_MODEL,
+        messages: [
+          {
+            role: "system",
+            content:
+              "Bạn là trợ lý giáo dục cho học sinh Việt Nam. Trả lời NGẮN GỌN, súc tích, dễ hiểu bằng tiếng Việt (tối đa vài câu). Giải thích nhanh, đi thẳng vào ý chính, không lan man.",
+          },
+          { role: "user", content: query.trim() },
+        ],
+        max_tokens: LLM_MAX_TOKENS,
+        temperature: 0.5,
       }),
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(20000),
     });
 
-    if (!ragResponse.ok) {
-      return NextResponse.json(
-        { error: "RAG server error", status: ragResponse.status },
-        { status: 502 }
-      );
+    if (!llmRes.ok) {
+      return NextResponse.json({ error: "LLM error", status: llmRes.status }, { status: 502 });
     }
 
-    const ragData = await ragResponse.json();
+    const data = await llmRes.json();
+    const answer: string = (data?.choices?.[0]?.message?.content ?? "").trim();
 
-    // Parse context if it's JSON
-    let parsedContext = ragData.context;
-    let contentLines: string[] = [];
-    let recitationTitle = "";
-
-    try {
-      const contextObj = JSON.parse(ragData.context);
-      if (contextObj.type === "full_recitation_lines" && contextObj.lines) {
-        recitationTitle = contextObj.title || "";
-        contentLines = contextObj.lines.map((l: any) => l.text || l.line || "");
-      }
-    } catch {
-      // context is plain text
-      contentLines = ragData.context ? ragData.context.split("\n") : [];
-    }
-
+    // Giữ nguyên shape cho frontend (context = câu trả lời; sources rỗng → không hiện nguồn)
     return NextResponse.json({
       query: query.trim(),
-      intent: ragData.intent || {},
-      sources: ragData.sources || [],
-      context: parsedContext,
-      contentLines,
-      recitationTitle,
+      intent: {},
+      sources: [],
+      context: answer,
+      contentLines: answer ? answer.split("\n") : [],
+      recitationTitle: "",
     });
-  } catch (error: any) {
-    console.error("RAG query error:", error);
-
-    if (error?.name === "TimeoutError") {
-      return NextResponse.json({ error: "RAG server timeout" }, { status: 504 });
+  } catch (error: unknown) {
+    console.error("LLM query error:", error);
+    if ((error as { name?: string })?.name === "TimeoutError") {
+      return NextResponse.json({ error: "LLM timeout" }, { status: 504 });
     }
-
-    return NextResponse.json({ error: "Failed to query RAG server" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to query LLM" }, { status: 500 });
   }
 }
