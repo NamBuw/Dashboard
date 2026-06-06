@@ -1,4 +1,5 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
+import { randomUUID } from "crypto";
 import { query } from "./db";
 
 const AUTHENTIK_JWKS_URI =
@@ -71,7 +72,14 @@ export async function verifyBearerToken(
 
     if (user) return user;
 
-    // JIT provisioning: create user if not exists
+    // No email claim → can't provision (email is NOT NULL + the account key).
+    if (!email) return null;
+
+    // JIT provisioning: create the user on first SSO login.
+    // ptalk_auth requires username + password_hash (NOT NULL) and has NO `role`
+    // column (that lived in the abandoned ptalk_business schema). So: synthetic
+    // username, a non-login password_hash, email_verified=true (Authentik already
+    // verified it), and never overwrite an existing authentik binding.
     const groups = (payload.groups as string[]) || [];
     const isSuperUser = groups.includes("SuperAdmin");
     const userType = (payload.user_type as string) || "account_owner";
@@ -80,22 +88,37 @@ export async function verifyBearerToken(
       (payload.preferred_username as string) ||
       email;
 
+    const usernameBase =
+      (email.split("@")[0] || (payload.preferred_username as string) || "user")
+        .toLowerCase()
+        .replace(/[^a-z0-9_]/g, "")
+        .slice(0, 40) || "user";
+    const username = `${usernameBase}_${String(authentikUserId)
+      .replace(/[^a-z0-9]/gi, "")
+      .slice(0, 8)}`.slice(0, 64);
+
     const [newUser] = await query<{
       id: string;
       email: string;
       is_superuser: boolean;
     }>(
-      `INSERT INTO users (authentik_user_id, email, full_name, display_name, role, user_type, is_superuser, subscription_tier)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'pro')
-       ON CONFLICT (email) DO UPDATE SET authentik_user_id = $1
+      `INSERT INTO users
+         (id, username, email, password_hash, display_name, full_name, user_type,
+          authentik_user_id, subscription_tier, is_active, is_superuser, email_verified)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true, $10, true)
+       ON CONFLICT (email) DO UPDATE
+         SET authentik_user_id = COALESCE(users.authentik_user_id, EXCLUDED.authentik_user_id)
        RETURNING id, email, is_superuser`,
       [
-        authentikUserId,
+        randomUUID(),
+        username,
         email,
+        "!sso-no-local-login", // SSO accounts never authenticate via bcrypt locally
         displayName,
         displayName,
-        isSuperUser ? "super_admin" : "owner",
         userType,
+        authentikUserId,
+        isSuperUser ? "pro" : "basic",
         isSuperUser,
       ]
     );
