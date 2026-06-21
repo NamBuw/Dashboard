@@ -1,5 +1,7 @@
 "use client";
 
+import { Card } from "@/components/ui/Card";
+
 const SUBJECT_LABELS: Record<string, string> = {
   toan: "Toán", ngu_van: "Ngữ văn", khtn: "KHTN", tieng_viet: "Tiếng Việt",
   lich_su: "Lịch sử", dia_li: "Địa lí", gdcd: "GDCD", tieng_anh: "Tiếng Anh",
@@ -17,7 +19,7 @@ interface Props {
 
 export function Heatmap({ subjects, grades, cells, onCellClick }: Props) {
   if (!subjects?.length || !grades?.length || !cells) {
-    return <div className="bg-card border border-border rounded-2xl p-6 text-muted text-sm">Chưa có dữ liệu heatmap</div>;
+    return <Card><div className="text-muted text-sm">Chưa có dữ liệu heatmap</div></Card>;
   }
   const map = new Map<string, number>();
   for (const c of cells) map.set(`${c.subject}|${c.grade}`, c.count);
@@ -27,12 +29,11 @@ export function Heatmap({ subjects, grades, cells, onCellClick }: Props) {
     if (v <= 0) return "transparent";
     const t = Math.log(v + 1) / Math.log(max + 1); // log scale
     const alpha = 0.12 + t * 0.78;
-    return `rgba(56, 189, 248, ${alpha.toFixed(3)})`; // sky/accent
+    return `rgba(59, 111, 224, ${alpha.toFixed(3)})`; // accent blue (--blue)
   };
 
   return (
-    <div className="bg-card border border-border rounded-2xl p-5 overflow-auto">
-      <h2 className="text-sm font-bold text-foreground mb-4">Phân bố theo Môn × Lớp (chunk đang dùng)</h2>
+    <Card title="Phân bố theo Môn × Lớp (chunk đang dùng)" bodyClassName="overflow-auto">
       <table className="border-collapse text-xs">
         <thead>
           <tr>
@@ -69,6 +70,6 @@ export function Heatmap({ subjects, grades, cells, onCellClick }: Props) {
         </tbody>
       </table>
       <p className="text-xs text-muted mt-3">Bấm vào ô để xem 20 chunk mẫu.</p>
-    </div>
+    </Card>
   );
 }

@@ -87,7 +87,7 @@ export default function BrowsePage() {
   };
 
   return (
-    <div className="flex h-full min-h-[70vh]">
+    <div className="flex flex-col lg:flex-row h-full min-h-[70vh]">
       <FilterSidebar filter={filter} onChange={setFilter} />
       <main className="flex-1 flex flex-col min-w-0">
         <div className="flex items-center justify-between gap-3 p-4 border-b border-border flex-wrap">

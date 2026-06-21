@@ -20,7 +20,7 @@ export function BrowseListView({ items, level, onClick }: { items: BrowseItem[];
       <div className="space-y-2">
         {items.map((it) => (
           <button key={it.id} onClick={() => onClick(it)}
-            className="w-full text-left p-4 bg-card border border-border rounded-lg hover:border-accent transition-colors">
+            className="w-full text-left p-4 bg-card border border-border rounded-lg hover:border-accent card-interactive">
             <div className="flex justify-between items-start gap-4">
               <div className="flex-1 min-w-0">
                 <div className="text-base font-medium text-foreground">{it.meta?.title ?? it.label}</div>
@@ -42,7 +42,7 @@ export function BrowseListView({ items, level, onClick }: { items: BrowseItem[];
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
       {items.map((it) => (
         <button key={it.id} onClick={() => onClick(it)}
-          className="flex flex-col items-start p-4 bg-card border border-border rounded-lg hover:border-accent transition-colors text-left">
+          className="flex flex-col items-start p-4 bg-card border border-border rounded-lg hover:border-accent card-interactive text-left">
           <div className="text-xs text-muted uppercase tracking-wide">{ICON[level] ? `${ICON[level]} ` : ""}{LEVEL_TITLES[level]}</div>
           <div className="text-lg font-semibold mt-1 text-foreground line-clamp-2">{it.label}</div>
           {it.meta?.title && level === "L3_lesson" && <div className="text-sm text-muted mt-1 line-clamp-2">{it.meta.title}</div>}

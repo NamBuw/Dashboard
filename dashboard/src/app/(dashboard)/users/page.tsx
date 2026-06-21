@@ -14,14 +14,35 @@ import {
   Smartphone,
   Calendar,
   Layers,
-  Heart,
-  BookOpen,
   Trash2,
   Edit,
   UserPlus,
+  GraduationCap,
+  MapPin,
+  BookOpen,
+  Phone,
+  MessageSquare,
+  ShieldBan,
+  ChevronRight as ChevronRightIcon,
 } from "lucide-react";
 import { clsx } from "clsx";
+import Link from "next/link";
 import { BentoShell } from "@/components/bento";
+
+// bộ sách (curriculum) code → Vietnamese label, mirrors sql/add_student_profile.sql.
+const CURRICULUM_LABELS: Record<string, string> = {
+  chan_troi_sang_tao: "Chân trời sáng tạo",
+  canh_dieu: "Cánh diều",
+  ket_noi_tri_thuc: "Kết nối tri thức",
+};
+
+const RELATIONSHIP_LABELS: Record<string, string> = {
+  father: "Bố",
+  mother: "Mẹ",
+  grandparent: "Ông/Bà",
+  guardian: "Người giám hộ",
+  other: "Khác",
+};
 
 interface ApiUser {
   id: string;
@@ -78,6 +99,29 @@ export default function UsersPage() {
   // 360 Degree profile states
   const [selectedUser, setSelectedUser] = useState<ApiUser | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  // Which child (of the selected parent) is being managed in the detail modal.
+  const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
+  const [detail360, setDetail360] = useState<{
+    devices: Array<{ id: string; serial_number: string | null; label: string | null; status: string | null; device_hw_id: string | null; rel: string }>;
+    messageCounts: Record<string, number>;
+    totalMessages: number;
+    student: {
+      fullName: string | null;
+      grade: string | null;
+      dateOfBirth: string | null;
+      hometown: string | null;
+      phone: string | null;
+      curriculum: string | null;
+    };
+    children: Array<{
+      id: string;
+      full_name: string | null;
+      grade: string | null;
+      date_of_birth: string | null;
+      curriculum: string | null;
+      relationship_type: string | null;
+    }>;
+  } | null>(null);
 
   // Add User states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -99,6 +143,7 @@ export default function UsersPage() {
     userType: "owner",
     tier: "basic",
     isActive: true,
+    isSuperuser: false,
   });
   const [editError, setEditError] = useState("");
   const [editLoading, setEditLoading] = useState(false);
@@ -107,6 +152,33 @@ export default function UsersPage() {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+
+  // Load real 360° data (devices + message counts) when the detail modal opens.
+  useEffect(() => {
+    if (!isDetailModalOpen || !selectedUser) { setDetail360(null); setSelectedChildId(null); return; }
+    setSelectedChildId(null);
+    let cancelled = false;
+    fetch(`/api/users/${selectedUser.id}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && d) setDetail360({
+          devices: d.devices || [],
+          messageCounts: d.messageCounts || {},
+          totalMessages: d.totalMessages || 0,
+          student: {
+            fullName: d.user?.full_name ?? null,
+            grade: d.user?.grade ?? null,
+            dateOfBirth: d.user?.date_of_birth ?? null,
+            hometown: d.user?.hometown ?? null,
+            phone: d.user?.phone_number ?? null,
+            curriculum: d.user?.curriculum ?? null,
+          },
+          children: d.children ?? [],
+        });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [isDetailModalOpen, selectedUser]);
 
   const fetchUsers = useCallback(async (page = 1) => {
     setLoading(true);
@@ -211,6 +283,7 @@ export default function UsersPage() {
           userType: editForm.userType,
           tier: editForm.tier,
           isActive: editForm.isActive,
+          isSuperuser: editForm.isSuperuser,
         }),
       });
 
@@ -314,7 +387,6 @@ export default function UsersPage() {
             >
               <option value="all" className="bg-[#090D16]">Tất cả Loại User</option>
               <option value="owner" className="bg-[#090D16]">Account Owner</option>
-              <option value="child" className="bg-[#090D16]">Child (Trẻ em)</option>
             </select>
           </div>
         </div>
@@ -429,6 +501,7 @@ export default function UsersPage() {
                                 userType: user.userType || "owner",
                                 tier: user.tier || "basic",
                                 isActive: user.isActive,
+                                isSuperuser: user.isSuperuser,
                               });
                               setIsEditModalOpen(true);
                             }}
@@ -527,6 +600,129 @@ export default function UsersPage() {
               </div>
             </div>
 
+            {/* Thông tin học sinh (read-only) — filled by the KidMentor app */}
+            {detail360?.student &&
+              (detail360.student.fullName ||
+                detail360.student.grade ||
+                detail360.student.dateOfBirth ||
+                detail360.student.hometown ||
+                detail360.student.phone ||
+                detail360.student.curriculum) && (
+                <div className="mb-6">
+                  <h3 className="text-xs font-bold text-muted uppercase tracking-wider flex items-center gap-1.5 mb-3">
+                    <GraduationCap size={12} className="text-accent" />
+                    {selectedUser.userType === "child" ? "Thông tin học sinh" : "Thông tin phụ huynh"}
+                  </h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    {[
+                      { icon: User, label: "Họ và tên", value: detail360.student.fullName },
+                      { icon: GraduationCap, label: "Lớp", value: detail360.student.grade ? `Lớp ${detail360.student.grade}` : null },
+                      { icon: Calendar, label: "Ngày sinh", value: detail360.student.dateOfBirth },
+                      { icon: MapPin, label: "Quê quán", value: detail360.student.hometown },
+                      { icon: Phone, label: "Số điện thoại", value: detail360.student.phone },
+                      {
+                        icon: BookOpen,
+                        label: "Bộ sách",
+                        value: detail360.student.curriculum
+                          ? CURRICULUM_LABELS[detail360.student.curriculum] || detail360.student.curriculum
+                          : null,
+                      },
+                    ]
+                      .filter((f) => f.value)
+                      .map((f) => (
+                        <div key={f.label} className="p-3 bg-white/5 border border-white/5 rounded-xl">
+                          <p className="text-[10px] text-muted font-bold uppercase tracking-wider flex items-center gap-1.5">
+                            <f.icon size={10} className="text-accent" />
+                            {f.label}
+                          </p>
+                          <p className="text-sm font-bold text-foreground mt-1">{f.value}</p>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+            {/* Hồ sơ các bé (children) linked to this user as a parent.
+                Pick a child → manage THAT child: view its chat, or its banned words.
+                A child IS a users row, so chat/banned-words key directly by its user id
+                (chat: /api/chat?userId=<childId>; banned-words: parent_user_id=<childId>). */}
+            {detail360?.children && detail360.children.length > 0 && (() => {
+              const selectedChild =
+                detail360.children.find((c) => c.id === selectedChildId) || null;
+              return (
+                <div className="mb-6">
+                  <h3 className="text-xs font-bold text-muted uppercase tracking-wider flex items-center gap-1.5 mb-3">
+                    <GraduationCap size={12} className="text-accent" />
+                    Hồ sơ các bé ({detail360.children.length}) — chọn bé để quản lý
+                  </h3>
+                  <div className="space-y-2.5">
+                    {detail360.children.map((c) => {
+                      const active = c.id === selectedChildId;
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => setSelectedChildId(active ? null : c.id)}
+                          className={clsx(
+                            "w-full text-left p-3 rounded-xl border transition-colors cursor-pointer",
+                            active
+                              ? "bg-accent/10 border-accent/40"
+                              : "bg-white/5 border-white/5 hover:border-white/10"
+                          )}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                              <ChevronRightIcon
+                                size={12}
+                                className={clsx(
+                                  "transition-transform",
+                                  active ? "rotate-90 text-accent" : "text-muted"
+                                )}
+                              />
+                              {c.full_name || "Bé"}
+                            </h4>
+                            <span className="text-[9px] bg-white/5 text-muted border border-white/5 font-bold px-2 py-0.5 rounded">
+                              {RELATIONSHIP_LABELS[c.relationship_type || ""] || c.relationship_type || "—"}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-muted mt-0.5 pl-[18px]">
+                            {c.grade ? `Lớp ${c.grade}` : "Chưa rõ lớp"}
+                            {c.curriculum ? ` · ${CURRICULUM_LABELS[c.curriculum] || c.curriculum}` : ""}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Actions for the picked child */}
+                  {selectedChild && (
+                    <div className="mt-3 p-3 bg-[#0C101A]/60 border border-accent/20 rounded-xl animate-in fade-in duration-150">
+                      <p className="text-[10px] text-muted mb-2.5">
+                        Quản lý <span className="font-bold text-foreground">{selectedChild.full_name || "Bé"}</span>
+                        <span className="font-mono"> · ID {selectedChild.id.substring(0, 8)}…</span>
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Link
+                          href={`/chats?userId=${selectedChild.id}`}
+                          className="flex items-center justify-center gap-1.5 px-3 py-2 bg-accent/10 border border-accent/20 hover:border-accent/40 rounded-lg text-xs font-bold text-accent transition-colors cursor-pointer"
+                        >
+                          <MessageSquare size={13} />
+                          Xem lịch sử chat
+                        </Link>
+                        <Link
+                          href={`/settings?childId=${selectedChild.id}`}
+                          className="flex items-center justify-center gap-1.5 px-3 py-2 bg-amber-500/10 border border-amber-500/20 hover:border-amber-500/30 rounded-lg text-xs font-bold text-amber-400 transition-colors cursor-pointer"
+                        >
+                          <ShieldBan size={13} />
+                          Từ ngữ bị cấm
+                        </Link>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             <div className="space-y-4">
               <h3 className="text-xs font-bold text-muted uppercase tracking-wider flex items-center gap-1.5">
                 <Layers size={12} className="text-purple-400" />
@@ -534,41 +730,44 @@ export default function UsersPage() {
               </h3>
 
               <div className="space-y-2.5">
-                <div className="p-3 bg-[#0C101A]/60 border border-white/5 rounded-xl flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="w-2.5 h-2.5 rounded-full bg-success animate-ping shrink-0" />
-                    <div>
-                      <h4 className="text-xs font-bold text-foreground">Robot PTalk Assistant</h4>
-                      <p className="text-[10px] text-muted mt-0.5">Thiết bị gán: Serial-PT-8819</p>
-                    </div>
-                  </div>
-                  <span className="text-[9px] bg-success/10 text-success border border-success/20 font-bold px-2 py-0.5 rounded uppercase">
-                    Active
-                  </span>
-                </div>
+                {detail360 === null && <p className="text-xs text-muted">Đang tải dữ liệu thật…</p>}
 
-                <div className={clsx(
-                  "p-3 border rounded-xl flex items-center justify-between transition-opacity",
-                  selectedUser.userType === "child" 
-                    ? "bg-[#0C101A]/60 border-white/5 opacity-100" 
-                    : "bg-black/10 border-white/5 opacity-40"
-                )}>
-                  <div className="flex items-center gap-3">
-                    <BookOpen size={14} className="text-accent" />
-                    <div>
-                      <h4 className="text-xs font-bold text-foreground">Kid Mentor App</h4>
-                      <p className="text-[10px] text-muted mt-0.5">Tiến độ bài học: 12/45 bài</p>
+                {/* Real assigned/owned devices */}
+                {detail360 && detail360.devices.length === 0 && (
+                  <p className="text-xs text-muted">Chưa gán/sở hữu thiết bị nào.</p>
+                )}
+                {detail360?.devices.map((d) => (
+                  <div key={d.id} className="p-3 bg-[#0C101A]/60 border border-white/5 rounded-xl flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className={clsx("w-2.5 h-2.5 rounded-full shrink-0", d.status === "online" ? "bg-success animate-ping" : "bg-muted")} />
+                      <div>
+                        <h4 className="text-xs font-bold text-foreground">{d.label || d.serial_number || "Robot PTalk"}</h4>
+                        <p className="text-[10px] text-muted mt-0.5">
+                          {d.rel === "assigned" ? "Được gán" : "Sở hữu"} · {d.serial_number || d.device_hw_id || "—"}
+                        </p>
+                      </div>
                     </div>
+                    <span className="text-[9px] bg-white/5 text-muted border border-white/5 font-bold px-2 py-0.5 rounded uppercase">
+                      {d.status || "offline"}
+                    </span>
                   </div>
-                  <span className={clsx(
-                    "text-[9px] font-bold px-2 py-0.5 rounded uppercase",
-                    selectedUser.userType === "child" 
-                      ? "bg-accent/10 text-accent border border-accent/20" 
-                      : "bg-white/5 text-muted"
-                  )}>
-                    {selectedUser.userType === "child" ? "Active" : "Not Enrolled"}
-                  </span>
-                </div>
+                ))}
+
+                {/* Real message counts per product */}
+                {detail360 && (
+                  <div className="grid grid-cols-3 gap-2 pt-1">
+                    {[
+                      { l: "Tổng tin nhắn", v: detail360.totalMessages },
+                      { l: "Kid Mentor", v: detail360.messageCounts.kids || 0 },
+                      { l: "Elder Care", v: detail360.messageCounts.eldercare || 0 },
+                    ].map((x) => (
+                      <div key={x.l} className="p-2.5 bg-white/5 border border-white/5 rounded-xl text-center">
+                        <div className="text-sm font-extrabold text-foreground">{x.v.toLocaleString("vi")}</div>
+                        <div className="text-[10px] text-muted mt-0.5">{x.l}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -787,6 +986,28 @@ export default function UsersPage() {
                     className={clsx(
                       "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
                       editForm.isActive ? "translate-x-5" : "translate-x-0"
+                    )}
+                  />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-white/5 border border-white/5 rounded-xl">
+                <div>
+                  <h4 className="text-xs font-bold text-foreground">Quyền quản trị (Admin)</h4>
+                  <p className="text-[10px] text-muted">Trao/thu quyền SuperAdmin cho tài khoản này</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditForm({ ...editForm, isSuperuser: !editForm.isSuperuser })}
+                  className={clsx(
+                    "relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                    editForm.isSuperuser ? "bg-red-500" : "bg-white/10"
+                  )}
+                >
+                  <span
+                    className={clsx(
+                      "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                      editForm.isSuperuser ? "translate-x-5" : "translate-x-0"
                     )}
                   />
                 </button>

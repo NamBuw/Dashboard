@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, CSSProperties } from "react";
 
 export interface DonutDatum {
   l: string;
@@ -45,6 +45,13 @@ export default function BentoDonut({ data, size = 190, thick = 26, center, cente
             strokeDashoffset={off}
             transform={`rotate(-90 ${cx} ${cx})`}
             strokeLinecap="round"
+            style={{
+              animation: "bentoDonutGrow .8s var(--ease-out-smooth) both",
+              animationDelay: `${i * 0.12}s`,
+              "--circ": `${c}`,
+              "--seg-dash": `${dash}`,
+              "--seg-rest": `${c - dash}`,
+            } as CSSProperties}
           />
         );
       })}

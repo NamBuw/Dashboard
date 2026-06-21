@@ -52,11 +52,11 @@ function LoginContent() {
         <div className="space-y-1">
           <div className="flex items-center gap-2.5 mb-1">
             <a href="https://ptit.edu.vn/" target="_blank" rel="noopener noreferrer">
-              <img src="/ptit-logo.png" alt="PTIT" className="h-9 w-auto opacity-80 hover:opacity-100 transition-opacity" />
+              <img src="/ptit-logo.png" alt="PTIT" className="h-40 w-auto opacity-80 hover:opacity-100 transition-opacity" />
             </a>
-            <div className="w-px h-5 bg-border" />
+            <div className="w-px h-24 bg-border" />
             <a href="https://ctslab.net/" target="_blank" rel="noopener noreferrer">
-              <img src="/cts-logo.png" alt="CTS Lab" className="h-8 w-auto opacity-80 hover:opacity-100 transition-opacity" />
+              <img src="/cts-logo.png" alt="CTS Lab" className="h-36 w-auto opacity-80 hover:opacity-100 transition-opacity" />
             </a>
           </div>
           <p className="text-[13px] text-muted-foreground">CTS Lab - PTIT</p>
@@ -97,9 +97,9 @@ function LoginContent() {
           {/* Mobile logo */}
           <div className="lg:hidden text-center">
             <div className="flex items-center justify-center gap-2.5 mb-2">
-              <img src="/ptit-logo.png" alt="PTIT" className="h-8 w-auto opacity-80" />
-              <div className="w-px h-4 bg-border" />
-              <img src="/cts-logo.png" alt="CTS" className="h-7 w-auto opacity-80" />
+              <img src="/ptit-logo.png" alt="PTIT" className="h-32 w-auto opacity-80" />
+              <div className="w-px h-20 bg-border" />
+              <img src="/cts-logo.png" alt="CTS" className="h-28 w-auto opacity-80" />
             </div>
           </div>
 

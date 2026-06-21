@@ -5,16 +5,14 @@ import { useState } from "react";
 import { Menu } from "lucide-react";
 import BentoSidebar from "./BentoSidebar";
 import BentoToolbar from "./BentoToolbar";
-import ProductDome from "./ProductDome";
 
 interface Props {
   title: ReactNode;
   sub?: ReactNode;
-  showDome?: boolean;
   children: ReactNode;
 }
 
-export default function BentoShell({ title, sub, showDome = true, children }: Props) {
+export default function BentoShell({ title, sub, children }: Props) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
@@ -37,14 +35,8 @@ export default function BentoShell({ title, sub, showDome = true, children }: Pr
         </>
       )}
 
-      <main style={{ flex: 1, minWidth: 0, padding: "22px 26px 34px", display: "flex", flexDirection: "column", gap: 22 }}>
-        {showDome && (
-          <div style={{ display: "flex", justifyContent: "center" }}>
-            <ProductDome />
-          </div>
-        )}
-
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20 }}>
+      <main className="bento-main-head" style={{ flex: 1, minWidth: 0, padding: "22px 26px 34px", display: "flex", flexDirection: "column", gap: 22 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
           <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 12 }}>
             <button
               type="button"
@@ -81,13 +73,24 @@ export default function BentoShell({ title, sub, showDome = true, children }: Pr
               {sub && <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 5 }}>{sub}</div>}
             </div>
           </div>
-          <BentoToolbar />
+          <div style={{ display: "flex", alignItems: "center", gap: 14, flex: "none" }}>
+            <BentoToolbar />
+          </div>
         </div>
 
         <style>{`
           @media (max-width: 1023px) {
             .bento-side-desktop { display: none !important; }
             .bento-mobile-menu { display: flex !important; }
+            .bento-dome-label { display: none !important; }
+          }
+          /* Phones: the fixed-width search would push the title + hamburger off-screen. */
+          @media (max-width: 767px) {
+            .bento-search-wrap { display: none !important; }
+          }
+          @media (max-width: 599px) {
+            .bento-main-head { padding: 16px 16px 24px !important; }
+            .bento-main-head h1 { font-size: 21px !important; }
           }
         `}</style>
 

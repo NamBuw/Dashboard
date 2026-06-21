@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
           username: username.toLowerCase().trim(),
           email: email.trim(),
           name: username.trim(),
-          is_active: false,  // Inactive until email verified
+          is_active: true,  // Active ngay — bỏ bước verify email (nội bộ, chưa cấu hình SMTP)
         }),
       });
 
@@ -105,9 +105,15 @@ export async function POST(request: NextRequest) {
         const errBody = await createRes.text();
         console.error("Authentik user creation failed:", createRes.status, errBody);
 
-        if (createRes.status === 400 && errBody.includes("already exists")) {
+        // Authentik 400 = lỗi validation/trùng (vd username|email "must be unique",
+        // "already exists"). Trả 409 JSON rõ ràng để FE hiển thị đúng — KHÔNG để rơi
+        // xuống 502 (Cloudflare bọc thành HTML → trình duyệt báo "Không thể kết nối đến server").
+        if (createRes.status === 400) {
+          const dup = /unique|already exists|exist|đã/i.test(errBody);
           return NextResponse.json(
-            { error: "Email hoặc tên đăng nhập đã được sử dụng" },
+            { error: dup
+                ? "Email hoặc tên đăng nhập đã được sử dụng"
+                : "Thông tin đăng ký không hợp lệ" },
             { status: 409 }
           );
         }
@@ -202,7 +208,7 @@ export async function POST(request: NextRequest) {
       userId = randomUUID();
       await query(
         `INSERT INTO users (id, username, email, password_hash, display_name, user_type, authentik_user_id, subscription_tier, is_active, is_superuser, email_verified)
-         VALUES ($1, $2, $3, $4, $5, 'account_owner', $6, 'basic', false, false, false)`,
+         VALUES ($1, $2, $3, $4, $5, 'account_owner', $6, 'basic', true, false, true)`,
         [
           userId,
           username.toLowerCase().trim(),
@@ -223,14 +229,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 8. Send verification email
-    await sendVerificationToken(userId, email.trim(), username.trim());
+    // 8. Tài khoản đã active + verified ngay → không gửi email xác thực.
+    //    (sendVerificationToken vẫn dùng cho path "tài khoản cũ chưa verify" ở trên
+    //     và route /api/auth/resend-verification khi đã cấu hình SMTP.)
 
     return NextResponse.json(
       {
         success: true,
-        message: "Tai khoan da duoc tao. Vui long kiem tra email de xac thuc tai khoan.",
-        requiresVerification: true,
+        message: "Tai khoan da duoc tao. Ban co the dang nhap ngay.",
+        requiresVerification: false,
       },
       { status: 201 }
     );

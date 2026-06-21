@@ -18,6 +18,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { clsx } from "clsx";
+import Link from "next/link";
 import { BentoShell } from "@/components/bento";
 
 interface Device {
@@ -338,6 +339,13 @@ export default function DevicesPage() {
                     {/* OTA firmware trigger / assign popup trigger */}
                     <td className="px-5 py-4 text-right">
                       <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                        <Link
+                          href={`/devices/${device.id}`}
+                          className="px-2.5 py-1 bg-white/5 border border-white/5 hover:border-white/10 rounded-lg text-xs font-bold text-foreground transition-all cursor-pointer flex items-center gap-1"
+                          title="Xem chi tiết & điều khiển"
+                        >
+                          Chi tiết
+                        </Link>
                         <button
                           onClick={() => {
                             setSelectedDevice(device);

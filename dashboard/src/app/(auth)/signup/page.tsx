@@ -13,8 +13,6 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
-  const [resendLoading, setResendLoading] = useState(false);
-  const [resendMsg, setResendMsg] = useState("");
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,19 +60,19 @@ export default function SignupPage() {
   return (
     <div className="min-h-screen flex">
       {/* Left - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 bg-sidebar-bg text-white flex-col justify-between p-12">
+      <div className="hidden lg:flex lg:w-1/2 bg-card border-r border-border text-foreground flex-col justify-between p-12">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">CTS Dashboard</h1>
-          <p className="text-sm text-white/60 mt-1">CTS Lab - PTIT</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">CTS Dashboard</h1>
+          <p className="text-sm text-muted-foreground mt-1">CTS Lab - PTIT</p>
         </div>
 
         <div className="space-y-6">
-          <h2 className="text-4xl font-bold leading-tight">
+          <h2 className="text-4xl font-bold leading-tight text-foreground">
             Tạo tài khoản mới
             <br />
             Tham gia hệ sinh thái PTalk
           </h2>
-          <p className="text-lg text-white/70 max-w-md">
+          <p className="text-lg text-muted-foreground max-w-md">
             Đăng ký tài khoản để truy cập PTalk Assistant, Kid Mentor, Elder Care.
           </p>
 
@@ -82,7 +80,7 @@ export default function SignupPage() {
             {["PTalk Assistant", "Kid Mentor", "Elder Care"].map((product) => (
               <div
                 key={product}
-                className="px-4 py-2 bg-white/10 rounded-lg text-sm font-medium"
+                className="px-4 py-2 bg-surface border border-border rounded-lg text-sm font-medium text-muted-foreground"
               >
                 {product}
               </div>
@@ -90,7 +88,7 @@ export default function SignupPage() {
           </div>
         </div>
 
-        <p className="text-xs text-white/40">
+        <p className="text-xs text-muted-foreground">
           &copy; 2026 CTS Lab. All rights reserved.
         </p>
       </div>
@@ -123,44 +121,13 @@ export default function SignupPage() {
                 <CheckCircle size={24} className="text-blue-600 mt-0.5 shrink-0" />
                 <div>
                   <p className="text-sm font-medium text-blue-800">
-                    Dang ky thanh cong!
+                    Đăng ký thành công!
                   </p>
                   <p className="text-sm text-blue-700 mt-1">
-                    Mot email xac thuc da duoc gui den <strong>{email}</strong>.
-                    Vui long kiem tra hop thu va nhan lien ket xac thuc de kich hoat tai khoan.
+                    Tài khoản <strong>{email}</strong> đã sẵn sàng. Bạn có thể đăng nhập ngay.
                   </p>
                 </div>
               </div>
-              {resendMsg && (
-                <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
-                  {resendMsg}
-                </div>
-              )}
-              <button
-                onClick={async () => {
-                  setResendLoading(true);
-                  setResendMsg("");
-                  try {
-                    const res = await fetch("/api/auth/resend-verification", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ email }),
-                    });
-                    const data = await res.json();
-                    setResendMsg(data.message || "Email xac thuc da duoc gui lai!");
-                  } catch {
-                    setResendMsg("Khong the gui lai email. Vui long thu lai sau.");
-                  }
-                  setResendLoading(false);
-                }}
-                disabled={resendLoading}
-                className="w-full flex items-center justify-center gap-2 px-6 py-3 border border-accent text-accent hover:bg-accent/5 rounded-lg font-medium transition-colors disabled:opacity-60"
-              >
-                {resendLoading ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : null}
-                {resendLoading ? "Dang gui..." : "Gui lai email xac thuc"}
-              </button>
               <Link
                 href="/login"
                 className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-accent hover:bg-accent-hover text-white rounded-lg font-medium transition-colors"

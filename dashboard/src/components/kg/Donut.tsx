@@ -1,16 +1,17 @@
 "use client";
 
+import { Card } from "@/components/ui/Card";
+import { seriesColor } from "@/lib/chart-colors";
+
 interface Slice { reason: string; count: number }
 interface Props {
   data?: Slice[];
   title?: string;
 }
 
-const PALETTE = ["#38bdf8", "#34d399", "#f59e0b", "#f472b6", "#a78bfa", "#fb7185", "#22d3ee", "#facc15", "#4ade80", "#c084fc", "#fca5a5", "#60a5fa"];
-
 export function Donut({ data, title = "Lý do bị loại" }: Props) {
   if (!data?.length) {
-    return <div className="bg-card border border-border rounded-2xl p-6 text-muted text-sm">Không có dữ liệu</div>;
+    return <Card><div className="text-muted text-sm">Không có dữ liệu</div></Card>;
   }
   const total = data.reduce((a, b) => a + b.count, 0) || 1;
   const R = 70, C = 90, STROKE = 28;
@@ -18,8 +19,7 @@ export function Donut({ data, title = "Lý do bị loại" }: Props) {
   let offset = 0;
 
   return (
-    <div className="bg-card border border-border rounded-2xl p-5">
-      <h2 className="text-sm font-bold text-foreground mb-4">{title}</h2>
+    <Card title={title}>
       <div className="flex items-center gap-6 flex-wrap">
         <svg width={C * 2} height={C * 2} viewBox={`0 0 ${C * 2} ${C * 2}`} className="shrink-0">
           <g transform={`rotate(-90 ${C} ${C})`}>
@@ -31,7 +31,7 @@ export function Donut({ data, title = "Lý do bị loại" }: Props) {
                   key={d.reason}
                   cx={C} cy={C} r={R}
                   fill="none"
-                  stroke={PALETTE[i % PALETTE.length]}
+                  style={{ stroke: seriesColor(i) }}
                   strokeWidth={STROKE}
                   strokeDasharray={`${dash} ${circ - dash}`}
                   strokeDashoffset={-offset}
@@ -53,13 +53,13 @@ export function Donut({ data, title = "Lý do bị loại" }: Props) {
         <ul className="text-xs space-y-1 min-w-0">
           {data.map((d, i) => (
             <li key={d.reason} className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: PALETTE[i % PALETTE.length] }} />
+              <span className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: seriesColor(i) }} />
               <span className="text-foreground truncate max-w-[200px]" title={d.reason}>{d.reason}</span>
               <span className="text-muted ml-auto">{d.count.toLocaleString()}</span>
             </li>
           ))}
         </ul>
       </div>
-    </div>
+    </Card>
   );
 }

@@ -59,6 +59,11 @@ export async function GET(request: NextRequest) {
     const params: unknown[] = [];
     let paramIdx = 1;
 
+    // Children (user_type='child') are never listed standalone in the admin Users list —
+    // a child belongs to an owner and is reached only by opening that owner's detail
+    // (the child selector), so its chat/banned-words are viewed under the owner.
+    conditions.push(`u.user_type <> 'child'`);
+
     if (!isSuperUser) {
       conditions.push(
         `(u.id = $${paramIdx} OR u.id IN (SELECT assigned_user_id FROM devices WHERE owner_id = $${paramIdx} AND assigned_user_id IS NOT NULL))`
@@ -241,7 +246,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden - Admin access required" }, { status: 403 });
     }
 
-    const { id, displayName, userType, tier, isActive } = await request.json();
+    const { id, displayName, userType, tier, isActive, isSuperuser } = await request.json();
 
     if (!id) {
       return NextResponse.json({ error: "Missing user ID" }, { status: 400 });
@@ -254,6 +259,14 @@ export async function PUT(request: NextRequest) {
        WHERE id = $5`,
       [displayName, userType, tier, isActive, id]
     );
+
+    // Grant/revoke admin (is_superuser). Guard: cannot revoke your own admin (lock-out).
+    if (typeof isSuperuser === "boolean" && id !== session.user.id) {
+      await query(
+        `UPDATE users SET is_superuser = $1, updated_at = NOW() WHERE id = $2`,
+        [isSuperuser, id]
+      );
+    }
 
     return NextResponse.json({ success: true, message: "User updated successfully" });
   } catch (error) {

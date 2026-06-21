@@ -10,7 +10,7 @@ export function middleware(request: NextRequest) {
   const isAuthenticated = !!sessionCookie;
 
   if (
-    (pathname.startsWith("/dashboard") || pathname.startsWith("/users") || pathname.startsWith("/devices") || pathname.startsWith("/chats") || pathname.startsWith("/products") || pathname.startsWith("/settings") || pathname.startsWith("/kg-analytics") || pathname.startsWith("/kg-browse")) &&
+    (pathname.startsWith("/dashboard") || pathname.startsWith("/users") || pathname.startsWith("/devices") || pathname.startsWith("/chats") || pathname.startsWith("/products") || pathname.startsWith("/settings") || pathname.startsWith("/kg-analytics") || pathname.startsWith("/kg-browse") || pathname.startsWith("/account") || pathname.startsWith("/onboarding") || pathname.startsWith("/logs")) &&
     !isAuthenticated
   ) {
     const loginUrl = new URL("/login", request.nextUrl);

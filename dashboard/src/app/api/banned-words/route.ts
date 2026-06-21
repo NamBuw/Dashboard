@@ -17,9 +17,38 @@ export async function GET(request: NextRequest) {
     const currentUserId = session.user.id;
     const { searchParams } = new URL(request.url);
     const parentOnly = searchParams.get("parent_only") === "true";
+    // Optional: scope to a single child (a child IS a users row; its per-child rules
+    // live as banned_words rows with parent_user_id = <child id>). Accepts either name.
+    const childId = searchParams.get("child_id") || searchParams.get("parent_user_id");
 
     let words;
-    if (isSuperUser && !parentOnly) {
+    if (childId) {
+      // Object-level auth: caller must own this child (admin bypasses) — a child is
+      // theirs when linked via a device assignment OR user_relationships.
+      if (!isSuperUser) {
+        const [link] = await query<{ count: string }>(
+          `SELECT (
+             (SELECT COUNT(*) FROM devices WHERE owner_id = $1 AND assigned_user_id = $2)
+             + (SELECT COUNT(*) FROM user_relationships WHERE parent_id = $1 AND child_id = $2)
+           ) AS count`,
+          [currentUserId, childId]
+        );
+        if (!link || Number(link.count) === 0) {
+          return NextResponse.json(
+            { error: "Forbidden - You can only view banned words for your own children" },
+            { status: 403 }
+          );
+        }
+      }
+      words = await query(
+        `SELECT bw.*, u.display_name as set_by_name
+         FROM banned_words bw
+         LEFT JOIN users u ON bw.set_by = u.id
+         WHERE bw.parent_user_id = $1
+         ORDER BY bw.created_at DESC`,
+        [childId]
+      );
+    } else if (isSuperUser && !parentOnly) {
       words = await query(
         `SELECT bw.*, u.display_name as set_by_name
          FROM banned_words bw
@@ -68,17 +97,20 @@ export async function POST(request: NextRequest) {
     const parentId = role === "admin" ? null : (parentUserId || currentUserId);
 
     // Object-level authorization: a parent may only scope a rule to themselves or to a
-    // child assigned to one of their own devices (mirrors the /api/chat ownership check).
+    // child of their own — either assigned to one of their devices OR linked via
+    // user_relationships(parent_id, child_id). The relationship link is the canonical
+    // path now that a child is a full users row used as the app's session identity.
     // Without this, a crafted parentUserId would let one parent plant banned words on any
     // victim's account — and CloudPTalk (moderation.py) would actually enforce them.
     if (role === "parent" && parentId !== currentUserId) {
-      const [dev] = await query<{ count: string }>(
-        `SELECT COUNT(*) AS count
-           FROM devices
-          WHERE owner_id = $1 AND assigned_user_id = $2`,
+      const [link] = await query<{ count: string }>(
+        `SELECT (
+           (SELECT COUNT(*) FROM devices WHERE owner_id = $1 AND assigned_user_id = $2)
+           + (SELECT COUNT(*) FROM user_relationships WHERE parent_id = $1 AND child_id = $2)
+         ) AS count`,
         [currentUserId, parentId]
       );
-      if (!dev || Number(dev.count) === 0) {
+      if (!link || Number(link.count) === 0) {
         return NextResponse.json(
           { error: "Forbidden - You can only set banned words for your own children" },
           { status: 403 }

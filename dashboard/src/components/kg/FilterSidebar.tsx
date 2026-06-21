@@ -42,7 +42,7 @@ export function FilterSidebar({ filter, onChange }: Props) {
   const reset = () => onChange({ bo_sach: null, subject: null, grade: null, lesson_no: null, concept_id: null, work: null, content_class: null, status: "prod" });
   const ccOpts = filter.subject ? CONTENT_CLASS[filter.subject] : undefined;
   return (
-    <aside className="w-[240px] border-r border-border p-4 space-y-4 shrink-0">
+    <aside className="w-full lg:w-[240px] border-b lg:border-b-0 lg:border-r border-border p-4 space-y-4 shrink-0">
       <h3 className="text-sm font-semibold text-muted">Bộ lọc</h3>
       <Select label="Bộ sách" value={filter.bo_sach} options={BOOKS}
         onChange={(v) => onChange({ ...filter, bo_sach: v, subject: null, grade: null, lesson_no: null, concept_id: null, work: null, content_class: null })} />

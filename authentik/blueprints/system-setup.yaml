@@ -371,3 +371,16 @@ entries:
       slug: ptalk-signature
     attrs:
       provider: !KeyOf provider-ptalk-signature
+
+  # 5. Global Authentication Configuration (Disable "Pretend user exists" to enforce username check)
+  - model: authentik_stages_identification.identificationstage
+    id: default-authentication-identification
+    state: present
+    identifiers:
+      name: default-authentication-identification
+    attrs:
+      user_fields:
+        - username
+        - email
+      pretend_user_exists: false
+

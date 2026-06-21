@@ -5,6 +5,7 @@ import { Donut } from "@/components/kg/Donut";
 import { BarChart } from "@/components/kg/BarChart";
 import { DrillDownTable } from "@/components/kg/DrillDownTable";
 import { RefreshButton } from "@/components/kg/RefreshButton";
+import { Card } from "@/components/ui/Card";
 import type { AnalyticsResponse } from "@/lib/kg-types";
 
 type BoSach = "ALL" | "KNTT" | "CTST" | "CD" | "NONE";
@@ -77,8 +78,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Concept theo môn */}
-      <div className="bg-card border border-border rounded-2xl p-5">
-        <h2 className="text-sm font-bold text-foreground mb-4">🧠 Concept theo môn</h2>
+      <Card title="🧠 Concept theo môn">
         <div className="space-y-3">
           {(data?.conceptsBySubject ?? []).map((c) => (
             <div key={c.subject}>
@@ -92,12 +92,10 @@ export default function AnalyticsPage() {
             </div>
           ))}
         </div>
-      </div>
+      </Card>
 
       {/* Quy mô kho tài liệu (lớp document thô + recitation) */}
-      <div className="bg-card border border-border rounded-2xl p-5">
-        <h2 className="text-sm font-bold text-foreground mb-1">📚 Quy mô kho tài liệu</h2>
-        <p className="text-xs text-muted mb-4">Toàn bộ tài liệu giáo dục đã thu thập & băm nhỏ (nền cho tìm kiếm ngữ nghĩa).</p>
+      <Card title="📚 Quy mô kho tài liệu" subtitle="Toàn bộ tài liệu giáo dục đã thu thập & băm nhỏ (nền cho tìm kiếm ngữ nghĩa).">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard label="Khối nội dung (ContentBlock)" value={t?.content_blocks} accent />
           <StatCard label="Tài liệu đầy đủ" value={t?.full_documents} />
@@ -107,14 +105,12 @@ export default function AnalyticsPage() {
           <StatCard label="📜 Bản nguyên văn" value={t?.literature_texts} />
           <StatCard label="📜 Tác phẩm đọc thuộc" value={t?.recite_works} />
         </div>
-      </div>
+      </Card>
 
       {/* Bản đồ tri thức (showcase tĩnh, self-contained) */}
-      <div className="bg-card border border-border rounded-2xl p-5">
-        <h2 className="text-sm font-bold text-foreground mb-1">Bản đồ Tri thức — tổng quan</h2>
-        <p className="text-xs text-muted mb-3">Sunburst (Môn · Lớp · Bộ) + heatmap độ phủ. Snapshot tĩnh.</p>
+      <Card title="Bản đồ Tri thức — tổng quan" subtitle="Sunburst (Môn · Lớp · Bộ) + heatmap độ phủ. Snapshot tĩnh.">
         <iframe src="/kg-showcase.html" title="KG Showcase" className="w-full rounded-lg border border-border" style={{ height: 820 }} />
-      </div>
+      </Card>
 
       {drillCell && <DrillDownTable cell={{ ...drillCell, bo_sach: boSach }} onClose={() => setDrillCell(null)} />}
     </div>
@@ -123,11 +119,11 @@ export default function AnalyticsPage() {
 
 function StatCard({ label, value, accent }: { label: string; value?: number | string; accent?: boolean }) {
   return (
-    <div className="bg-card border border-border rounded-2xl p-4">
+    <Card>
       <div className="text-xs text-muted">{label}</div>
       <div className={`text-2xl font-bold mt-1 ${accent ? "text-accent" : "text-foreground"}`}>
         {value == null ? "—" : typeof value === "number" ? value.toLocaleString() : value}
       </div>
-    </div>
+    </Card>
   );
 }

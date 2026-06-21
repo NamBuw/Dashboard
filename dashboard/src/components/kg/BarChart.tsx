@@ -1,5 +1,7 @@
 "use client";
 
+import { Card } from "@/components/ui/Card";
+
 interface Bar { bo_sach: string; count: number }
 interface Props {
   data?: Bar[];
@@ -12,13 +14,12 @@ const BOOK_LABELS: Record<string, string> = {
 
 export function BarChart({ data, title = "Phân bố theo bộ sách" }: Props) {
   if (!data?.length) {
-    return <div className="bg-card border border-border rounded-2xl p-6 text-muted text-sm">Không có dữ liệu</div>;
+    return <Card><div className="text-muted text-sm">Không có dữ liệu</div></Card>;
   }
   const max = Math.max(1, ...data.map((d) => d.count));
 
   return (
-    <div className="bg-card border border-border rounded-2xl p-5">
-      <h2 className="text-sm font-bold text-foreground mb-4">{title}</h2>
+    <Card title={title}>
       <div className="space-y-3">
         {data.map((d) => {
           const pct = (d.count / max) * 100;
@@ -35,6 +36,6 @@ export function BarChart({ data, title = "Phân bố theo bộ sách" }: Props) 
           );
         })}
       </div>
-    </div>
+    </Card>
   );
 }

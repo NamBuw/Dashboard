@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 export interface HBarDatum {
   l: string;
   v: number;
@@ -29,8 +31,10 @@ export default function BentoHBars({ data, max, format }: Props) {
                 height: "100%",
                 borderRadius: 6,
                 background: d.c ?? "var(--blue)",
-                transition: "width .3s ease",
-              }}
+                animation: "bentoBarGrow .7s var(--ease-out-smooth) both",
+                animationDelay: `${i * 0.08}s`,
+                "--bw": `${(d.v / m) * 100}%`,
+              } as CSSProperties}
             />
           </div>
         </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import {
   Settings,
   Bell,
@@ -13,10 +13,15 @@ import {
   Shield,
   Plus,
   Trash2,
+  Baby,
+  X,
 } from "lucide-react";
 import { clsx } from "clsx";
+import Link from "next/link";
 import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import { BentoShell } from "@/components/bento";
+import UsersChildrenPanel from "@/components/settings/UsersChildrenPanel";
 
 interface SystemService {
   name: string;
@@ -46,19 +51,21 @@ interface BannedTopic {
   words: BannedWord[];
 }
 
-export default function SettingsPage() {
+function SettingsContent() {
   const { data: session } = useSession();
-  const [telegramToken, setTelegramToken] = useState("bot1289381923:AAElk2...");
-  const [telegramChatId, setTelegramChatId] = useState("-100238128");
+  const searchParams = useSearchParams();
+  // Optional child scope: /settings?childId=<id> → manage THIS child's banned words.
+  // A child is a users row, so its per-child rules are banned_words.parent_user_id=<id>.
+  const childId = searchParams.get("childId");
+  const [childName, setChildName] = useState<string | null>(null);
+  const [telegramToken, setTelegramToken] = useState("");
+  const [telegramChatId, setTelegramChatId] = useState("");
   const [offlineThreshold, setOfflineThreshold] = useState(15);
   const [emailAlerts, setEmailAlerts] = useState(true);
+  const [savingSettings, setSavingSettings] = useState(false);
 
-  const [services] = useState<SystemService[]>([
-    { name: "Auth Identity Service", status: "healthy", latency: 45 },
-    { name: "PostgreSQL Database", status: "healthy", latency: 2 },
-    { name: "MQTT Broker (PTalk)", status: "healthy", latency: 12 },
-    { name: "KidMentor API Gateway", status: "warning", latency: 180 },
-  ]);
+  const [services, setServices] = useState<SystemService[]>([]);
+  const [loadingHealth, setLoadingHealth] = useState(true);
 
   // Banned words + topics state
   const [bannedWords, setBannedWords] = useState<BannedWord[]>([]);
@@ -74,12 +81,16 @@ export default function SettingsPage() {
   const fetchBannedWords = useCallback(async () => {
     setLoadingWords(true);
     try {
-      const res = await fetch("/api/banned-words");
+      // When scoped to a child, list only that child's per-child rules.
+      const url = childId
+        ? `/api/banned-words?child_id=${encodeURIComponent(childId)}`
+        : "/api/banned-words";
+      const res = await fetch(url);
       const data = await res.json();
       setBannedWords(data.words || []);
     } catch { /* ignore */ }
     setLoadingWords(false);
-  }, []);
+  }, [childId]);
 
   const fetchBannedTopics = useCallback(async () => {
     try {
@@ -97,6 +108,40 @@ export default function SettingsPage() {
 
   useEffect(() => { refreshAll(); }, [refreshAll]);
 
+  // Resolve the scoped child's display name for the banner (best-effort).
+  useEffect(() => {
+    if (!childId) { setChildName(null); return; }
+    let alive = true;
+    fetch(`/api/users/${childId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (alive && d?.user) setChildName(d.user.full_name || d.user.display_name || d.user.username || null);
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [childId]);
+
+  // Load saved alert rules + live service health (SuperAdmin only endpoints).
+  useEffect(() => {
+    if (!isSuperUser) { setLoadingHealth(false); return; }
+    fetch("/api/settings")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return;
+        setOfflineThreshold(d.offlineThresholdMin ?? 15);
+        setEmailAlerts(d.emailAlertsEnabled ?? true);
+        setTelegramToken(d.telegramToken ?? "");
+        setTelegramChatId(d.telegramChatId ?? "");
+      })
+      .catch(() => {});
+    setLoadingHealth(true);
+    fetch("/api/health")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.services) setServices(d.services); })
+      .catch(() => {})
+      .finally(() => setLoadingHealth(false));
+  }, [isSuperUser]);
+
   const handleAddWord = async (topicId?: string) => {
     const value = topicId ? prompt("Thêm từ cấm vào chủ đề:")?.trim() : newWord.trim();
     if (!value) return;
@@ -107,7 +152,9 @@ export default function SettingsPage() {
         body: JSON.stringify({
           word: value,
           category: topicId ? "general" : newCategory,
-          setByRole: isSuperUser ? "admin" : "parent",
+          // Child-scoped → always a per-child ('parent') rule on that child id.
+          setByRole: childId ? "parent" : isSuperUser ? "admin" : "parent",
+          parentUserId: childId || undefined,
           topicId: topicId || undefined,
         }),
       });
@@ -193,9 +240,26 @@ export default function SettingsPage() {
     } catch { /* ignore */ }
   };
 
-  const handleSaveSettings = (e: React.FormEvent) => {
+  const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert("Đã lưu cấu hình cảnh báo và giám sát thành công!");
+    setSavingSettings(true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          offlineThresholdMin: offlineThreshold,
+          emailAlertsEnabled: emailAlerts,
+          telegramToken,
+          telegramChatId,
+        }),
+      });
+      alert(res.ok ? "Đã lưu cấu hình cảnh báo." : "Lưu thất bại (cần quyền Super Admin).");
+    } catch {
+      alert("Không kết nối được máy chủ.");
+    } finally {
+      setSavingSettings(false);
+    }
   };
 
   return (
@@ -282,12 +346,13 @@ export default function SettingsPage() {
 
             {/* Save Button */}
             <div className="pt-4 border-t border-white/5 flex justify-end">
-              <button 
+              <button
                 type="submit"
-                className="px-4 py-2.5 bg-accent hover:bg-accent-hover text-white text-xs font-bold rounded-xl flex items-center gap-2 transition-all cursor-pointer shadow-lg glow-accent"
+                disabled={savingSettings}
+                className="px-4 py-2.5 bg-accent hover:bg-accent-hover text-white text-xs font-bold rounded-xl flex items-center gap-2 transition-all cursor-pointer shadow-lg glow-accent disabled:opacity-50"
               >
                 <Save size={16} />
-                Lưu cấu hình quy tắc
+                {savingSettings ? "Đang lưu…" : "Lưu cấu hình quy tắc"}
               </button>
             </div>
           </form>
@@ -303,6 +368,12 @@ export default function SettingsPage() {
             <p className="text-xs text-muted mb-6">Độ trễ phản hồi (Latency check) của các cổng dịch vụ microservices.</p>
 
             <div className="space-y-3.5">
+              {loadingHealth && services.length === 0 && (
+                <p className="text-xs text-muted">Đang kiểm tra dịch vụ…</p>
+              )}
+              {!loadingHealth && services.length === 0 && (
+                <p className="text-xs text-muted">Không lấy được trạng thái dịch vụ (cần quyền Super Admin).</p>
+              )}
               {services.map((srv, idx) => (
                 <div key={idx} className="p-3 bg-white/5 border border-white/5 rounded-xl flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -335,8 +406,33 @@ export default function SettingsPage() {
           <Shield size={18} className="text-danger" />
           Từ ngữ bị cấm
         </h2>
+
+        {/* Child-scoped banner: rules below apply ONLY to the selected child. */}
+        {childId && (
+          <div className="flex items-center justify-between gap-3 mb-4 p-3 bg-accent/10 border border-accent/20 rounded-xl">
+            <div className="flex items-center gap-2 min-w-0">
+              <Baby size={15} className="text-accent shrink-0" />
+              <p className="text-xs text-foreground min-w-0">
+                Đang quản lý từ cấm cho{" "}
+                <span className="font-bold">{childName || "bé"}</span>
+                <span className="font-mono text-muted"> · ID {childId.substring(0, 8)}…</span>
+              </p>
+            </div>
+            <Link
+              href="/settings"
+              className="flex items-center gap-1 text-[11px] font-bold text-muted hover:text-foreground transition-colors shrink-0"
+            >
+              <X size={12} /> Bỏ lọc
+            </Link>
+          </div>
+        )}
+
         <p className="text-xs text-muted mb-4">
-          {isSuperUser ? "Quản lý từ cấm toàn hệ thống (Admin)" : "Thêm từ cấm cho con bạn (Phụ huynh)"}
+          {childId
+            ? "Từ cấm thêm ở đây chỉ áp dụng cho riêng bé đã chọn."
+            : isSuperUser
+              ? "Quản lý từ cấm toàn hệ thống (Admin)"
+              : "Thêm từ cấm cho con bạn (Phụ huynh)"}
         </p>
 
         {/* Add word form */}
@@ -538,6 +634,17 @@ export default function SettingsPage() {
           ))}
         </div>
       </div>
+
+      <UsersChildrenPanel />
     </BentoShell>
+  );
+}
+
+// useSearchParams() requires a Suspense boundary (CSR bailout) — wrap the page.
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={null}>
+      <SettingsContent />
+    </Suspense>
   );
 }

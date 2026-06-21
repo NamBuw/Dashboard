@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
   Users,
@@ -51,24 +52,30 @@ const tierMeta: Record<string, { label: string; color: string; icon: React.Eleme
   basic: { label: "Basic", color: "var(--blue)", icon: User },
 };
 
-// Preserved from prior implementation — no /api/traffic-24h endpoint yet.
-// TODO: wire to a real endpoint when available.
-const TRAFFIC_24H = [20, 32, 26, 18, 22, 30, 48, 62, 70, 66, 58, 74, 88, 80, 72, 90, 84, 96, 88, 78, 64, 52, 40, 30];
-
-// Preserved from prior implementation — no /api/alerts endpoint yet.
-const mockAlerts = [
-  { id: 1, message: "Robot PTalk-7729 mất kết nối > 15 phút", severity: "high" as const, time: "5 phút trước" },
-  { id: 2, message: "Robot PTalk-1823 pin yếu < 10%", severity: "warning" as const, time: "45 phút trước" },
-  { id: 3, message: "Auth Service API latency cao (420ms)", severity: "neutral" as const, time: "2 giờ trước" },
-];
+interface Alert {
+  id: string | number;
+  message: string;
+  severity: "high" | "warning" | "neutral";
+  time: string;
+}
 
 export default function DashboardOverview() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
+  const router = useRouter();
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [traffic, setTraffic] = useState<number[]>([]);
   const isSuperUser = !!session?.user?.is_superuser;
+
+  // Admin View only — normal accounts (parents) go to their User View.
+  useEffect(() => {
+    if (status === "authenticated" && !session?.user?.is_superuser) {
+      router.replace("/account");
+    }
+  }, [status, session, router]);
 
   useEffect(() => {
     fetch("/api/stats")
@@ -79,6 +86,11 @@ export default function DashboardOverview() {
       })
       .catch(() => setError("Không kết nối được server"))
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/alerts").then((r) => r.json()).then((d) => setAlerts(d.alerts || [])).catch(() => {});
+    fetch("/api/traffic-24h").then((r) => r.json()).then((d) => setTraffic(d.traffic || [])).catch(() => {});
   }, []);
 
   const tierDonut = useMemo(() => {
@@ -104,18 +116,15 @@ export default function DashboardOverview() {
   if (loading) {
     return (
       <BentoShell title="Tổng quan" sub="Đang tải dữ liệu…">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "40vh" }}>
-          <div
-            style={{
-              width: 22,
-              height: 22,
-              border: "2px solid var(--line)",
-              borderTopColor: "var(--ink)",
-              borderRadius: "50%",
-              animation: "spin 1s linear infinite",
-            }}
-          />
-          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        <div className="grid-kpi">
+          {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton" style={{ height: 110, borderRadius: 20 }} />)}
+        </div>
+        <div className="grid-12">
+          <div className="skeleton" style={{ gridColumn: "span 8", height: 280, borderRadius: 26 }} />
+          <div className="skeleton" style={{ gridColumn: "span 4", height: 280, borderRadius: 26 }} />
+          <div className="skeleton" style={{ gridColumn: "span 4", height: 220, borderRadius: 26 }} />
+          <div className="skeleton" style={{ gridColumn: "span 4", height: 220, borderRadius: 26 }} />
+          <div className="skeleton" style={{ gridColumn: "span 4", height: 220, borderRadius: 26 }} />
         </div>
       </BentoShell>
     );
@@ -153,6 +162,7 @@ export default function DashboardOverview() {
   }
 
   const totalTierUsers = tierDonut.reduce((s, d) => s + d.v, 0);
+  const traf = traffic.length === 24 ? traffic : new Array(24).fill(0);
   const activeRate = stats.users.total > 0 ? Math.round((stats.requests.activeUsersToday / stats.users.total) * 100) : 0;
   const onlineRate = stats.devices.total > 0 ? Math.round((stats.devices.online / stats.devices.total) * 100) : 0;
 
@@ -162,7 +172,7 @@ export default function DashboardOverview() {
       sub={isSuperUser ? "Giám sát thiết bị, người dùng và lưu lượng theo thời gian thực" : "Theo dõi robot và lịch sử chat"}
     >
       {/* KPI row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 18 }}>
+      <div className="stagger grid-kpi">
         <BentoStat
           icon={Users}
           label="Tổng người dùng"
@@ -196,7 +206,7 @@ export default function DashboardOverview() {
       </div>
 
       {/* Bento grid — every panel is a BentoModule. .bento-mod.exp spans the full row. */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(12, minmax(0, 1fr))", gap: 22, alignItems: "start" }}>
+      <div className="grid-12">
         <div style={{ gridColumn: "span 8", minWidth: 0 }}>
           <BentoModule
             id="traffic"
@@ -205,8 +215,8 @@ export default function DashboardOverview() {
             expandedId={expandedId}
             onToggle={toggle}
             detail={[
-              { l: "Cao điểm", v: `${Math.max(...TRAFFIC_24H)}` },
-              { l: "Trung bình / giờ", v: `${Math.round(TRAFFIC_24H.reduce((a, b) => a + b, 0) / TRAFFIC_24H.length)}` },
+              { l: "Cao điểm", v: `${Math.max(...traf)}` },
+              { l: "Trung bình / giờ", v: `${Math.round(traf.reduce((a, b) => a + b, 0) / traf.length)}` },
               { l: "Người dùng hoạt động", v: stats.requests.activeUsersToday.toLocaleString("vi") },
               { l: "Tổng requests", v: stats.requests.totalToday.toLocaleString("vi") },
             ]}
@@ -216,10 +226,10 @@ export default function DashboardOverview() {
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                   <TrendingUp size={14} style={{ color: "var(--blue)" }} strokeWidth={1.8} />
                   <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>
-                    24 giờ gần nhất · TODO: nối API thật khi sẵn sàng
+                    24 giờ gần nhất · dữ liệu thật
                   </span>
                 </div>
-                <BentoLineDrop a={TRAFFIC_24H} tip={17} h={exp ? 280 : 200} w={exp ? 1100 : 580} />
+                <BentoLineDrop a={traf} tip={17} h={exp ? 280 : 200} w={exp ? 1100 : 580} />
                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 11, color: "var(--faint)" }} className="mono">
                   <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>23:59</span>
                 </div>
@@ -295,15 +305,18 @@ export default function DashboardOverview() {
             expandedId={expandedId}
             onToggle={toggle}
             detail={[
-              { l: "Cấp bách", v: mockAlerts.filter((a) => a.severity === "high").length },
-              { l: "Cảnh giác", v: mockAlerts.filter((a) => a.severity === "warning").length },
-              { l: "Thông báo", v: mockAlerts.filter((a) => a.severity === "neutral").length },
-              { l: "Tổng cộng", v: mockAlerts.length },
+              { l: "Cấp bách", v: alerts.filter((a) => a.severity === "high").length },
+              { l: "Cảnh giác", v: alerts.filter((a) => a.severity === "warning").length },
+              { l: "Thông báo", v: alerts.filter((a) => a.severity === "neutral").length },
+              { l: "Tổng cộng", v: alerts.length },
             ]}
           >
             {() => (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {mockAlerts.map((alert) => {
+                {alerts.length === 0 && (
+                  <div style={{ padding: 12, fontSize: 12.5, color: "var(--muted)" }}>Không có cảnh báo nào.</div>
+                )}
+                {alerts.map((alert) => {
                   const tone =
                     alert.severity === "high" ? "var(--red)" :
                     alert.severity === "warning" ? "var(--amber)" : "var(--slate)";

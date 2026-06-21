@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { verifyBearerToken } from "@/lib/api-auth";
+import { canViewUserChat } from "@/lib/chat-access";
 
 /**
  * GET /api/v1/chat/messages?session_id=userId_YYYY-MM-DD&page=1&limit=50
@@ -40,18 +41,9 @@ export async function GET(request: NextRequest) {
     const sessionUserId = parts[0];
     const sessionDate = parts.slice(1).join("_"); // Handle dates with underscores if any
 
-    // RBAC check
-    if (!user.is_superuser) {
-      const isOwner = sessionUserId === user.id;
-      const isDependent =
-        (await query<{ count: string }>(
-          `SELECT COUNT(*) as count FROM user_relationships WHERE owner_id = $1 AND dependent_id = $2`,
-          [user.id, sessionUserId]
-        ))[0]?.count !== "0";
-
-      if (!isOwner && !isDependent) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
+    // RBAC: viewer must be the user, own a device they're assigned to, or be their parent.
+    if (!user.is_superuser && !(await canViewUserChat(user.id, sessionUserId))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     // Get messages from conversation_logs
@@ -137,16 +129,8 @@ export async function DELETE(request: NextRequest) {
     const sessionUserId = parts[0];
     const sessionDate = parts.slice(1).join("_");
 
-    if (!user.is_superuser) {
-      const isOwner = sessionUserId === user.id;
-      const isDependent =
-        (await query<{ count: string }>(
-          `SELECT COUNT(*) as count FROM user_relationships WHERE owner_id = $1 AND dependent_id = $2`,
-          [user.id, sessionUserId]
-        ))[0]?.count !== "0";
-      if (!isOwner && !isDependent) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
+    if (!user.is_superuser && !(await canViewUserChat(user.id, sessionUserId))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const deleted = await query<{ id: string }>(

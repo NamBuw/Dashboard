@@ -48,6 +48,27 @@
   --shadow: 0 1px 2px rgba(20,22,28,.04), 0 10px 26px -12px rgba(20,22,28,.16);
   --shadow-sm: 0 1px 2px rgba(20,22,28,.05), 0 3px 8px -4px rgba(20,22,28,.10);
 
+  /* Radius scale — collapses the old ad-hoc 6–26px set onto 5 steps */
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 18px;
+  --r-xl: 22px;
+  --r-2xl: 26px;
+
+  /* Type scale (size) */
+  --t-display: 32px;
+  --t-h1: 22px;
+  --t-h2: 18px;
+  --t-title: 15px;
+  --t-body: 13.5px;
+  --t-label: 12px;
+  --t-cap: 11px;
+
+  /* Motion durations (ease tokens live in the motion section below) */
+  --dur-fast: 140ms;
+  --dur: 200ms;
+  --dur-slow: 320ms;
+
   /* ── Semantic aliases (keep older code rendering) ── */
   --background: var(--page);
   --foreground: var(--ink);
@@ -500,4 +521,74 @@ body {
   letter-spacing: -.02em;
   margin-top: 4px;
   color: var(--ink);
+}
+
+/* ─── Motion system (added) ─── */
+:root {
+  --ease-out-smooth: cubic-bezier(.2,.8,.3,1);
+  --ease-spring: cubic-bezier(.34,1.56,.64,1);
+}
+
+@keyframes slideUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+@keyframes scaleIn { from { opacity:0; transform:scale(.96); } to { opacity:1; transform:scale(1); } }
+@keyframes shimmer { 0% { background-position:-180% 0; } 100% { background-position:180% 0; } }
+
+.anim-rise { animation: slideUp .28s var(--ease-out-smooth) both; }
+.anim-scale-in { animation: scaleIn .16s var(--ease-out-smooth) both; transform-origin: top; }
+
+/* Staggered enter: add .stagger on the container; children read --i for delay */
+.stagger > * { animation: slideUp .3s var(--ease-out-smooth) both; animation-delay: calc(var(--i, 0) * 45ms); }
+
+/* Skeleton shimmer block */
+.skeleton {
+  background: linear-gradient(100deg, var(--inner-2) 30%, color-mix(in srgb, var(--ink) 8%, var(--inner-2)) 50%, var(--inner-2) 70%);
+  background-size: 200% 100%;
+  animation: shimmer 1.25s ease-in-out infinite;
+  border-radius: 10px;
+}
+
+/* Hover-lift on cards — subtle synchronized lift + zoom, one easing/duration everywhere */
+.card, .glass-card, .bento-stat { transition: transform var(--dur) var(--ease-out-smooth), box-shadow var(--dur) var(--ease-out-smooth), border-color var(--dur-fast) ease; }
+.card:hover, .glass-card:hover, .bento-stat:hover { transform: translateY(-2px) scale(1.01); box-shadow: var(--shadow); }
+.bento-mod:hover .bento-inner { box-shadow: var(--shadow), 0 10px 30px -16px color-mix(in srgb, var(--blue) 40%, transparent); }
+
+/* Interactive (clickable) cards — opt-in: a touch more lift + zoom + press feedback */
+.card-interactive {
+  cursor: pointer;
+  transition: transform var(--dur) var(--ease-out-smooth), box-shadow var(--dur) var(--ease-out-smooth), border-color var(--dur-fast) ease;
+}
+.card-interactive:hover { transform: translateY(-3px) scale(1.015); box-shadow: var(--shadow); border-color: var(--border-hover); }
+.card-interactive:active { transform: translateY(-1px) scale(.997); }
+
+/* ─── Responsive layout helpers ───
+   Inline styles can't carry media queries; these classes replace the fixed inline
+   grids so every page collapses to one column on small screens and uses its desktop
+   layout from lg (1024px) up. Children keep their `grid-column: span N` — harmless in
+   the 1-col fallback. */
+.grid-kpi { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.grid-stat-3 { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); }
+.grid-12 { display: grid; gap: 22px; grid-template-columns: 1fr; align-items: start; }
+.split-4-8, .split-8-4, .split-5-7 { display: grid; gap: 22px; grid-template-columns: 1fr; }
+.split-4-8 { align-items: stretch; }
+.split-8-4, .split-5-7 { align-items: start; }
+@media (min-width: 1024px) {
+  .grid-12 { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+  .split-4-8 { grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); }
+  .split-8-4 { grid-template-columns: minmax(0, 8fr) minmax(0, 4fr); }
+  .split-5-7 { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); }
+}
+
+/* Chart draw-in */
+@keyframes bentoDonutGrow { from { stroke-dasharray: 0 var(--circ); } to { stroke-dasharray: var(--seg-dash) var(--seg-rest); } }
+@keyframes bentoBarGrow { from { width: 0; } to { width: var(--bw); } }
+@keyframes bentoLineDraw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

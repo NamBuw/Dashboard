@@ -29,10 +29,20 @@ export default function BentoSpark({ data, color = "var(--blue)", w = 120, h = 4
               <stop offset="100%" stopColor={color} stopOpacity="0" />
             </linearGradient>
           </defs>
-          <path d={`${line} L${w} ${h} L0 ${h} Z`} fill={`url(#sp${id})`} />
+          <path d={`${line} L${w} ${h} L0 ${h} Z`} fill={`url(#sp${id})`} style={{ animation: "fadeIn .6s ease both", animationDelay: ".25s" }} />
         </>
       )}
-      <path d={line} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d={line}
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        pathLength={1}
+        strokeDasharray={1}
+        style={{ animation: "bentoLineDraw .9s var(--ease-out-smooth) both" }}
+      />
     </svg>
   );
 }

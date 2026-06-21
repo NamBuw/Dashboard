@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, Suspense } from "react";
 import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import {
   Search,
   MessageSquare,
@@ -28,32 +29,23 @@ import {
   BentoSpark,
 } from "@/components/bento";
 import { useProduct, productToChatSource } from "@/components/ProductProvider";
+import ChatMarkdown from "@/components/ChatMarkdown";
 import { exportCsv, exportHtml, exportJson, exportTxt } from "./exporters";
 
 interface ChatSession {
   id: string;
-  userId: string;
-  deviceId: string | null;
   productSource: string;
-  channel: string;
-  title: string | null;
+  title: string;
   messageCount: number;
-  avgSentiment: string | null;
   startedAt: string;
-  lastMessageAt: string | null;
-  userName: string | null;
-  deviceLabel: string | null;
+  lastMessageAt: string;
 }
 
 interface ChatMessage {
   id: string;
   sender: string;
-  messageType: string;
   content: string;
-  audioUrl: string | null;
-  audioDuration: number | null;
   sentiment: string | null;
-  emotionCode: string | null;
   createdAt: string;
 }
 
@@ -76,6 +68,8 @@ interface ChatLog {
   message: string;
   sentiment: string;
   source: string;
+  session_id?: string | null;
+  channel?: string | null;
   created_at: string;
 }
 
@@ -91,9 +85,32 @@ const sourceColor: Record<string, string> = {
   app: "var(--sky)",
 };
 
-export default function ChatManagementPage() {
+const pad = (n: number) => String(n).padStart(2, "0");
+const dayKey = (iso: string) => {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+// Group key for a turn: its real pipeline session, else its calendar day.
+const sessionKeyOf = (l: ChatLog) =>
+  l.session_id ? `s:${l.session_id}` : `d:${dayKey(l.created_at)}`;
+
+// Guard against the same DB row appearing twice in a list (duplicate React keys
+// / accidental double render).
+function dedupeById<T extends { id: string }>(arr: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const x of arr) {
+    if (!seen.has(x.id)) { seen.add(x.id); out.push(x); }
+  }
+  return out;
+}
+
+function ChatManagementPage() {
   const { data: session } = useSession();
   const { active: activeProduct } = useProduct();
+  const searchParams = useSearchParams();
+  // Deep-link target: /chats?userId=<id> (e.g. from the Users modal "view child's chat").
+  const targetUserId = searchParams.get("userId");
 
   const [users, setUsers] = useState<ApiUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
@@ -101,6 +118,7 @@ export default function ChatManagementPage() {
 
   const [chatLogs, setChatLogs] = useState<ChatLog[]>([]);
   const [loadingChats, setLoadingChats] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
@@ -112,13 +130,21 @@ export default function ChatManagementPage() {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  const [chatSource, setChatSource] = useState<"robot" | "app">("robot");
+  const [chatSource, setChatSource] = useState<"robot" | "app">("app");
 
   const [appSessions, setAppSessions] = useState<ChatSession[]>([]);
+  const [appLogs, setAppLogs] = useState<ChatLog[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
+  const [appError, setAppError] = useState<string | null>(null);
   const [selectedSession, setSelectedSession] = useState<ChatSession | null>(null);
   const [appMessages, setAppMessages] = useState<ChatMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
+
+  // Per-day "sessions" for the App Chat tab are derived client-side from /api/chat
+  // (cookie-authed, RBAC-enforced). The /api/v1/chat/* endpoints are a mobile-only
+  // Bearer-token contract and 401 from the browser, so we don't use them here.
+  // Raw logs grouped by session id (`userId_YYYY-MM-DD`) for the message view.
+  const appLogsBySession = useRef<Record<string, ChatLog[]>>({});
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -129,14 +155,49 @@ export default function ChatManagementPage() {
       const res = await fetch("/api/users?limit=100");
       const data = await res.json();
       const fetched: ApiUser[] = data.users || [];
-      setUsers(fetched);
-      if (fetched.length > 0) {
-        const isSuper = !!session?.user?.is_superuser;
-        if (!isSuper) {
-          const child = fetched.find((u) => u.userType === "child");
-          setSelectedUser(child || fetched[0]);
+
+      // Deep-link: if /chats?userId=<id> targets a user not in the (page-limited) list,
+      // fetch that single user so it can be selected + shown (e.g. a specific child).
+      let list = fetched;
+      if (targetUserId && !fetched.some((u) => u.id === targetUserId)) {
+        try {
+          const r = await fetch(`/api/users/${targetUserId}`);
+          if (r.ok) {
+            const d2 = await r.json();
+            const u = d2.user;
+            if (u) {
+              list = [
+                {
+                  id: u.id,
+                  username: u.username,
+                  email: u.email,
+                  displayName: u.display_name ?? null,
+                  userType: u.user_type ?? "child",
+                  tier: u.subscription_tier ?? "basic",
+                  isActive: !!u.is_active,
+                  isSuperuser: !!u.is_superuser,
+                  createdAt: u.created_at,
+                },
+                ...fetched,
+              ];
+            }
+          }
+        } catch { /* fall through to default selection */ }
+      }
+
+      setUsers(list);
+      if (list.length > 0) {
+        const target = targetUserId ? list.find((u) => u.id === targetUserId) : null;
+        if (target) {
+          setSelectedUser(target);
         } else {
-          setSelectedUser(fetched[0]);
+          const isSuper = !!session?.user?.is_superuser;
+          if (!isSuper) {
+            const child = list.find((u) => u.userType === "child");
+            setSelectedUser(child || list[0]);
+          } else {
+            setSelectedUser(list[0]);
+          }
         }
       }
     } catch (err) {
@@ -144,21 +205,33 @@ export default function ChatManagementPage() {
     } finally {
       setLoadingUsers(false);
     }
-  }, [session]);
+  }, [session, targetUserId]);
 
   useEffect(() => { fetchUsersList(); }, [fetchUsersList]);
 
   // ── Fetch chat history (filtered by dome product) ──
   const fetchChatsForUser = useCallback(async (userId: string, source: string | null) => {
     setLoadingChats(true);
+    setChatError(null);
     try {
-      const sourceParam = source ? `&source=${source}` : "";
-      const res = await fetch(`/api/chat?userId=${userId}${sourceParam}`);
+      const params = new URLSearchParams({ userId, channel: "robot" });
+      if (source) params.set("source", source);
+      const res = await fetch(`/api/chat?${params.toString()}`);
+      if (!res.ok) {
+        setChatLogs([]);
+        setChatError(
+          res.status === 403
+            ? "Bạn không có quyền xem lịch sử của tài khoản này."
+            : `Không tải được lịch sử (lỗi ${res.status}).`,
+        );
+        return;
+      }
       const data = await res.json();
-      setChatLogs(data.chatLogs || []);
+      setChatLogs(dedupeById(data.chatLogs || []));
     } catch (err) {
       console.error("Failed to fetch chats", err);
       setChatLogs([]);
+      setChatError("Không kết nối được máy chủ.");
     } finally {
       setLoadingChats(false);
     }
@@ -172,34 +245,87 @@ export default function ChatManagementPage() {
     }
   }, [selectedUser, activeProduct, fetchChatsForUser]);
 
-  // ── App sessions ──
+  // ── App sessions (channel='app', grouped by pipeline session / day) ──
   const fetchAppSessions = useCallback(async (userId: string) => {
     setLoadingSessions(true);
+    setAppError(null);
     try {
-      const res = await fetch(`/api/v1/chat/sessions?limit=50`);
+      const res = await fetch(`/api/chat?userId=${encodeURIComponent(userId)}&channel=app`);
+      if (!res.ok) {
+        setAppLogs([]);
+        setAppSessions([]);
+        appLogsBySession.current = {};
+        setAppError(
+          res.status === 403
+            ? "Bạn không có quyền xem lịch sử của tài khoản này."
+            : `Không tải được phiên (lỗi ${res.status}).`,
+        );
+        return;
+      }
       const data = await res.json();
-      const userSessions = (data.sessions || []).filter((s: ChatSession) => s.userId === userId);
-      setAppSessions(userSessions);
+      const logs: ChatLog[] = dedupeById(data.chatLogs || []);
+      setAppLogs(logs);
+
+      // Group into real conversation sessions by the pipeline session_id; fall back
+      // to per-day grouping for legacy rows written before the session_id column.
+      const groups: Record<string, ChatLog[]> = {};
+      for (const l of logs) {
+        const d = new Date(l.created_at);
+        if (Number.isNaN(d.getTime())) continue;
+        (groups[`${userId}::${sessionKeyOf(l)}`] ||= []).push(l);
+      }
+      appLogsBySession.current = groups;
+
+      const sessions: ChatSession[] = Object.entries(groups)
+        .map(([id, ls]) => {
+          const sorted = [...ls].sort(
+            (a, b) =>
+              (+new Date(a.created_at) - +new Date(b.created_at)) ||
+              ((a.sender === "user" ? 0 : 1) - (b.sender === "user" ? 0 : 1)),
+          );
+          const first = sorted[0];
+          const last = sorted[sorted.length - 1];
+          return {
+            id,
+            productSource: sourceLabel[last.source] ?? "Ứng dụng",
+            title: first.session_id
+              ? `Phiên ${new Date(first.created_at).toLocaleString("vi-VN")}`
+              : `Ngày ${new Date(first.created_at).toLocaleDateString("vi-VN")}`,
+            messageCount: ls.length,
+            startedAt: first.created_at,
+            lastMessageAt: last.created_at,
+          };
+        })
+        .sort((a, b) => +new Date(b.lastMessageAt) - +new Date(a.lastMessageAt));
+
+      setAppSessions(sessions);
     } catch (err) {
       console.error("Failed to fetch app sessions", err);
       setAppSessions([]);
+      setAppLogs([]);
+      setAppError("Không kết nối được máy chủ.");
     } finally {
       setLoadingSessions(false);
     }
   }, []);
 
-  const fetchSessionMessages = useCallback(async (sessionId: string) => {
+  const fetchSessionMessages = useCallback((sessionId: string) => {
     setLoadingMessages(true);
-    try {
-      const res = await fetch(`/api/v1/chat/messages?session_id=${sessionId}&limit=100`);
-      const data = await res.json();
-      setAppMessages(data.messages || []);
-    } catch (err) {
-      console.error("Failed to fetch session messages", err);
-      setAppMessages([]);
-    } finally {
-      setLoadingMessages(false);
-    }
+    const logs = [...(appLogsBySession.current[sessionId] || [])].sort(
+      (a, b) =>
+        (+new Date(a.created_at) - +new Date(b.created_at)) ||
+        ((a.sender === "user" ? 0 : 1) - (b.sender === "user" ? 0 : 1)),
+    );
+    setAppMessages(
+      logs.map((l) => ({
+        id: l.id,
+        sender: l.sender,
+        content: l.message,
+        sentiment: l.sentiment,
+        createdAt: l.created_at,
+      })),
+    );
+    setLoadingMessages(false);
   }, []);
 
   useEffect(() => {
@@ -241,6 +367,7 @@ export default function ChatManagementPage() {
           sender: simSender,
           message: newMessage.trim(),
           sentiment: simSentiment,
+          channel: "robot", // simulator lives on the Robot tab
         }),
       });
       if (!res.ok) throw new Error("Failed to save conversation log");
@@ -253,22 +380,27 @@ export default function ChatManagementPage() {
     }
   };
 
-  // ── Derived aggregates for KPI strip ──
+  // Active dataset = the tab currently being viewed (robot logs vs app logs), so
+  // the KPIs and bottom charts reflect what's on screen.
+  const activeLogs = chatSource === "robot" ? chatLogs : appLogs;
+
+  // ── Derived aggregates for KPI strip (scoped to active tab + selected user) ──
   const aggregates = useMemo(() => {
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const todayLogs = chatLogs.filter((l) => new Date(l.created_at) >= today);
-    const distinctUsers = new Set(chatLogs.map((l) => l.user_id)).size;
+    const total = activeLogs.length;
+    const userTurns = activeLogs.filter((l) => l.sender === "user").length;
+    const positive = activeLogs.filter((l) => l.sentiment === "positive").length;
     return {
-      sessionsToday: todayLogs.length,
-      totalMessages: chatLogs.length,
-      distinctUsers,
+      total,
+      userTurns,
+      positivePct: total ? Math.round((positive / total) * 100) : 0,
+      sessions: new Set(activeLogs.map(sessionKeyOf)).size,
     };
-  }, [chatLogs]);
+  }, [activeLogs]);
 
   // ── Source distribution donut data ──
   const sourceDonut = useMemo(() => {
     const counts: Record<string, number> = {};
-    for (const l of chatLogs) {
+    for (const l of activeLogs) {
       const s = l.source || "app";
       counts[s] = (counts[s] || 0) + 1;
     }
@@ -277,22 +409,19 @@ export default function ChatManagementPage() {
       v,
       c: sourceColor[k] ?? "var(--slate)",
     }));
-  }, [chatLogs]);
+  }, [activeLogs]);
 
   // ── Hourly buckets (0-23) ──
   const hourly = useMemo(() => {
     const buckets = Array(24).fill(0);
-    for (const l of chatLogs) {
+    for (const l of activeLogs) {
       const h = new Date(l.created_at).getHours();
       if (Number.isFinite(h) && h >= 0 && h < 24) buckets[h]++;
     }
     return buckets;
-  }, [chatLogs]);
+  }, [activeLogs]);
 
   const sourceTotal = sourceDonut.reduce((s, d) => s + d.v, 0);
-  const robotPct = sourceTotal > 0
-    ? Math.round(((sourceDonut.find((s) => s.l !== "Ứng dụng")?.v ?? 0) / sourceTotal) * 100)
-    : 0;
 
   return (
     <BentoShell
@@ -300,11 +429,11 @@ export default function ChatManagementPage() {
       sub={`Nhật ký hội thoại · ${activeProduct === "all" ? "toàn hệ sinh thái" : sourceLabel[productToChatSource(activeProduct) ?? "app"] ?? "ứng dụng"}`}
     >
       {/* KPI row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 18 }}>
-        <BentoStat icon={Inbox} label="Phiên hôm nay" value={aggregates.sessionsToday.toLocaleString("vi")} delta="hôm nay" deltaTone="neutral" />
-        <BentoStat icon={UsersIcon} label="Người dùng có chat" value={aggregates.distinctUsers.toLocaleString("vi")} delta="đang theo dõi" deltaTone="neutral" />
-        <BentoStat icon={Activity} label="Tổng tin nhắn" value={aggregates.totalMessages.toLocaleString("vi")} delta="trong phạm vi" deltaTone="neutral" />
-        <BentoStat icon={Heart} label="Robot voice" value={`${robotPct}%`} delta="trên app" deltaTone="neutral" />
+      <div className="stagger grid-kpi">
+        <BentoStat icon={Inbox} label="Số phiên" value={aggregates.sessions.toLocaleString("vi")} delta={chatSource === "robot" ? "robot" : "app"} deltaTone="neutral" />
+        <BentoStat icon={Activity} label="Tổng tin nhắn" value={aggregates.total.toLocaleString("vi")} delta="trong phạm vi" deltaTone="neutral" />
+        <BentoStat icon={UsersIcon} label="Lượt người dùng hỏi" value={aggregates.userTurns.toLocaleString("vi")} delta="câu hỏi" deltaTone="neutral" />
+        <BentoStat icon={Heart} label="Cảm xúc tích cực" value={`${aggregates.positivePct}%`} delta="trên tổng" deltaTone="neutral" />
       </div>
 
       {/* Source tab */}
@@ -328,7 +457,7 @@ export default function ChatManagementPage() {
           }}
         >
           <Bot size={14} strokeWidth={1.8} />
-          Robot Chat (Voice)
+          Robot
         </button>
         <button
           onClick={() => setChatSource("app")}
@@ -349,12 +478,12 @@ export default function ChatManagementPage() {
           }}
         >
           <Smartphone size={14} strokeWidth={1.8} />
-          App Chat (Kid Mentor / PTalk)
+          App
         </button>
       </div>
 
       {/* Main split */}
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 4fr) minmax(0, 8fr)", gap: 22, alignItems: "stretch" }}>
+      <div className="split-4-8">
         {/* User list */}
         <BentoOuter title="Danh sách tài khoản" sub="Tìm và chọn người dùng để xem nhật ký">
           <div className="bento-inner" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -400,7 +529,7 @@ export default function ChatManagementPage() {
               </select>
             </div>
 
-            <div style={{ flex: 1, overflowY: "auto", maxHeight: 460, display: "flex", flexDirection: "column", gap: 6 }}>
+            <div className="stagger" style={{ flex: 1, overflowY: "auto", maxHeight: 460, display: "flex", flexDirection: "column", gap: 6 }}>
               {loadingUsers ? (
                 <div style={{ padding: 32, textAlign: "center", fontSize: 12, color: "var(--muted)" }}>Đang nạp…</div>
               ) : filteredUsers.length === 0 ? (
@@ -451,20 +580,20 @@ export default function ChatManagementPage() {
         {/* Transcript */}
         <BentoOuter
           title={selectedUser ? (selectedUser.displayName || selectedUser.username) : "Bản ghi hội thoại"}
-          sub={selectedUser ? `${chatLogs.length.toLocaleString("vi")} tin nhắn` : "Chọn một tài khoản để xem"}
+          sub={selectedUser ? `${activeLogs.length.toLocaleString("vi")} tin nhắn` : "Chọn một tài khoản để xem"}
           right={
-            selectedUser && chatSource === "robot" && (
+            selectedUser && activeLogs.length > 0 && (
               <div style={{ display: "flex", gap: 6 }}>
-                <button onClick={() => exportJson(selectedUser, chatLogs)} disabled={chatLogs.length === 0} type="button" title="JSON" className="bento-ib" style={{ cursor: "pointer", opacity: chatLogs.length === 0 ? 0.4 : 1 }}>
+                <button onClick={() => exportJson(selectedUser, activeLogs)} type="button" title="JSON" className="bento-ib" style={{ cursor: "pointer" }}>
                   <FileJson size={14} strokeWidth={1.8} />
                 </button>
-                <button onClick={() => exportCsv(selectedUser, chatLogs)} disabled={chatLogs.length === 0} type="button" title="CSV" className="bento-ib" style={{ cursor: "pointer", opacity: chatLogs.length === 0 ? 0.4 : 1 }}>
+                <button onClick={() => exportCsv(selectedUser, activeLogs)} type="button" title="CSV" className="bento-ib" style={{ cursor: "pointer" }}>
                   <FileSpreadsheet size={14} strokeWidth={1.8} />
                 </button>
-                <button onClick={() => exportTxt(selectedUser, chatLogs)} disabled={chatLogs.length === 0} type="button" title="TXT" className="bento-ib" style={{ cursor: "pointer", opacity: chatLogs.length === 0 ? 0.4 : 1 }}>
+                <button onClick={() => exportTxt(selectedUser, activeLogs)} type="button" title="TXT" className="bento-ib" style={{ cursor: "pointer" }}>
                   <FileText size={14} strokeWidth={1.8} />
                 </button>
-                <button onClick={() => exportHtml(selectedUser, chatLogs)} disabled={chatLogs.length === 0} type="button" title="HTML" className="bento-ib" style={{ cursor: "pointer", opacity: chatLogs.length === 0 ? 0.4 : 1 }}>
+                <button onClick={() => exportHtml(selectedUser, activeLogs)} type="button" title="HTML" className="bento-ib" style={{ cursor: "pointer" }}>
                   <FileCode size={14} strokeWidth={1.8} />
                 </button>
               </div>
@@ -485,16 +614,21 @@ export default function ChatManagementPage() {
                 <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12, paddingRight: 4 }}>
                   {loadingChats ? (
                     <div style={{ padding: 40, textAlign: "center", fontSize: 12, color: "var(--muted)" }}>Đang lấy lịch sử…</div>
+                  ) : chatError ? (
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "var(--red)" }}>
+                      <AlertCircle size={22} style={{ color: "var(--red)", marginBottom: 8 }} />
+                      <span style={{ fontSize: 12, color: "var(--red)" }}>{chatError}</span>
+                    </div>
                   ) : chatLogs.length === 0 ? (
                     <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "var(--muted)" }}>
                       <AlertCircle size={22} style={{ color: "var(--faint)", marginBottom: 8 }} />
-                      <span style={{ fontSize: 12 }}>Không có tin nhắn nào trong phạm vi đã chọn</span>
+                      <span style={{ fontSize: 12 }}>Chưa có tin nhắn robot nào cho tài khoản này</span>
                     </div>
                   ) : (
                     chatLogs.map((log) => {
                       const isUser = log.sender === "user";
                       return (
-                        <div key={log.id} style={{ display: "flex", justifyContent: isUser ? "flex-end" : "flex-start" }}>
+                        <div key={log.id} className="anim-rise" style={{ display: "flex", justifyContent: isUser ? "flex-end" : "flex-start" }}>
                           <div style={{ maxWidth: "82%" }}>
                             <div
                               style={{
@@ -506,7 +640,7 @@ export default function ChatManagementPage() {
                                 lineHeight: 1.45,
                               }}
                             >
-                              {log.message}
+                              <ChatMarkdown text={log.message} />
                             </div>
                             <div
                               className="mono"
@@ -593,6 +727,11 @@ export default function ChatManagementPage() {
               <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 12, overflowY: "auto" }}>
                 {loadingSessions ? (
                   <div style={{ padding: 40, textAlign: "center", fontSize: 12, color: "var(--muted)" }}>Đang nạp phiên…</div>
+                ) : appError ? (
+                  <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "var(--red)" }}>
+                    <AlertCircle size={22} style={{ color: "var(--red)", marginBottom: 8 }} />
+                    <span style={{ fontSize: 12, color: "var(--red)" }}>{appError}</span>
+                  </div>
                 ) : appSessions.length === 0 ? (
                   <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "var(--muted)" }}>
                     <AlertCircle size={22} style={{ color: "var(--faint)", marginBottom: 8 }} />
@@ -646,7 +785,7 @@ export default function ChatManagementPage() {
                       appMessages.map((m) => {
                         const isUser = m.sender === "user";
                         return (
-                          <div key={m.id} style={{ display: "flex", justifyContent: isUser ? "flex-end" : "flex-start" }}>
+                          <div key={m.id} className="anim-rise" style={{ display: "flex", justifyContent: isUser ? "flex-end" : "flex-start" }}>
                             <div style={{ maxWidth: "82%" }}>
                               <div
                                 style={{
@@ -658,7 +797,7 @@ export default function ChatManagementPage() {
                                   lineHeight: 1.45,
                                 }}
                               >
-                                {m.content}
+                                <ChatMarkdown text={m.content} />
                               </div>
                               <div
                                 className="mono"
@@ -685,7 +824,7 @@ export default function ChatManagementPage() {
       </div>
 
       {/* Bottom row — source donut + hourly spark */}
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 4fr) minmax(0, 8fr)", gap: 22 }}>
+      <div className="split-4-8">
         <BentoOuter title="Nguồn dữ liệu" sub="Phân bố tin nhắn theo nguồn">
           <div className="bento-inner" style={{ display: "flex", alignItems: "center", gap: 22 }}>
             {sourceDonut.length === 0 ? (
@@ -712,7 +851,7 @@ export default function ChatManagementPage() {
                 <div className="s">Đếm theo giờ tạo</div>
               </div>
             </div>
-            {chatLogs.length === 0 ? (
+            {activeLogs.length === 0 ? (
               <div style={{ padding: 20, color: "var(--muted)", fontSize: 12 }}>Chưa có dữ liệu</div>
             ) : (
               <>
@@ -726,5 +865,14 @@ export default function ChatManagementPage() {
         </BentoOuter>
       </div>
     </BentoShell>
+  );
+}
+
+// useSearchParams() requires a Suspense boundary (CSR bailout) — wrap the page.
+export default function ChatsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ChatManagementPage />
+    </Suspense>
   );
 }

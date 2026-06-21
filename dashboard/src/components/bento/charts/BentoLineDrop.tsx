@@ -42,12 +42,12 @@ export default function BentoLineDrop({
           opacity={i === ti ? 1 : 0.9}
         />
       ))}
-      {b && <path d={path(b)} fill="none" stroke={colorB} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />}
-      <path d={path(a)} fill="none" stroke={colorA} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+      {b && <path d={path(b)} fill="none" stroke={colorB} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" pathLength={1} strokeDasharray={1} style={{ animation: "bentoLineDraw 1s var(--ease-out-smooth) both" }} />}
+      <path d={path(a)} fill="none" stroke={colorA} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" pathLength={1} strokeDasharray={1} style={{ animation: "bentoLineDraw 1s var(--ease-out-smooth) both" }} />
       {a.map((v, i) => (
-        <circle key={i} cx={X(i)} cy={Y(v)} r="3" fill="var(--inner)" stroke={colorA} strokeWidth="2" />
+        <circle key={i} cx={X(i)} cy={Y(v)} r="3" fill="var(--inner)" stroke={colorA} strokeWidth="2" style={{ animation: "fadeIn .4s ease both", animationDelay: `${0.5 + i * 0.03}s` }} />
       ))}
-      <g transform={`translate(${X(ti) + 12}, ${Y(a[ti]) - 26})`}>
+      <g transform={`translate(${X(ti) + 12}, ${Y(a[ti]) - 26})`} style={{ animation: "fadeIn .5s ease both", animationDelay: ".7s" }}>
         <rect
           width={b ? 78 : 58}
           height={b ? 44 : 28}

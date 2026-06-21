@@ -68,10 +68,10 @@ function ResetPasswordForm() {
   return (
     <div className="min-h-screen flex w-full">
       {/* Left - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 bg-sidebar-bg text-white flex-col justify-between p-12">
+      <div className="hidden lg:flex lg:w-1/2 bg-card border-r border-border text-foreground flex-col justify-between p-12">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">CTS Dashboard</h1>
-          <p className="text-sm text-white/60 mt-1">CTS Lab - PTIT</p>
+          <p className="text-sm text-muted-foreground mt-1">CTS Lab - PTIT</p>
         </div>
 
         <div className="space-y-6">
@@ -80,7 +80,7 @@ function ResetPasswordForm() {
             <br />
             An toàn tối đa
           </h2>
-          <p className="text-lg text-white/70 max-w-md">
+          <p className="text-lg text-muted-foreground max-w-md">
             Mật khẩu mới của bạn sẽ được mã hoá bảo mật bcrypt chuẩn công nghiệp trước khi được cập nhật vào cơ sở dữ liệu.
           </p>
 
@@ -88,7 +88,7 @@ function ResetPasswordForm() {
             {["PTalk Assistant", "Kid Mentor", "Elder Care"].map((product) => (
               <div
                 key={product}
-                className="px-4 py-2 bg-white/10 rounded-lg text-sm font-medium"
+                className="px-4 py-2 bg-surface border border-border rounded-lg text-sm font-medium text-muted-foreground"
               >
                 {product}
               </div>
@@ -96,7 +96,7 @@ function ResetPasswordForm() {
           </div>
         </div>
 
-        <p className="text-xs text-white/40">
+        <p className="text-xs text-muted-foreground">
           &copy; 2026 CTS Lab. All rights reserved.
         </p>
       </div>

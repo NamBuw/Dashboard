@@ -23,6 +23,16 @@ function download(name: string, dataUri: string) {
   a.remove();
 }
 
+// Escape user-controlled text before interpolating into the exported HTML so a
+// chat message containing markup/script can't execute when the file is opened.
+function esc(s: string): string {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 export function exportJson(user: ExportUser, logs: ExportLog[]) {
   if (logs.length === 0) return;
   const data = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(logs, null, 2));
@@ -76,7 +86,7 @@ export function exportHtml(user: ExportUser, logs: ExportLog[]) {
     return `<div class="message-row ${isUser ? "user" : "robot"}">
         <div class="bubble">
           <div class="sender-name">${isUser ? "BÉ / USER" : "ROBOT PTALK"}</div>
-          <div>${log.message}</div>
+          <div>${esc(log.message)}</div>
           <div class="message-footer">
             <span>${time}</span>
             <span class="sentiment-badge ${badge[0]}">${badge[1]}</span>
@@ -85,7 +95,7 @@ export function exportHtml(user: ExportUser, logs: ExportLog[]) {
       </div>`;
   }).join("\n");
 
-  const html = `<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><title>Báo cáo Hội thoại - ${name}</title>
+  const html = `<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><title>Báo cáo Hội thoại - ${esc(name)}</title>
 <style>
 body{background:#f7f8fa;color:#14161c;font-family:-apple-system,BlinkMacSystemFont,sans-serif;margin:0;padding:40px 20px;display:flex;justify-content:center}
 .container{max-width:750px;width:100%;background:#fff;border:1px solid #edeef1;border-radius:24px;padding:30px;box-shadow:0 12px 32px rgba(20,22,28,.08)}
@@ -108,9 +118,9 @@ h1{font-size:24px;margin-top:0;color:#14161c;border-bottom:1px solid #edeef1;pad
 <div class="container">
 <h1>Nhật ký hội thoại với PTalk Assistant</h1>
 <div class="meta-grid">
-<div class="meta-item">Người dùng: <strong>${name}</strong></div>
+<div class="meta-item">Người dùng: <strong>${esc(name)}</strong></div>
 <div class="meta-item">Mạng kết nối: <strong>PTalk Ecosystem</strong></div>
-<div class="meta-item">Loại tài khoản: <strong style="text-transform:capitalize">${user.userType}</strong></div>
+<div class="meta-item">Loại tài khoản: <strong style="text-transform:capitalize">${esc(user.userType)}</strong></div>
 <div class="meta-item">Ngày xuất: <strong>${new Date().toLocaleString("vi-VN")}</strong></div>
 </div>
 <div class="chat-container">${body}</div>
