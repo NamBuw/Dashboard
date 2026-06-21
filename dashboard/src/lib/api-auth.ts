@@ -1,9 +1,17 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
+import { randomUUID } from "crypto";
 import { query } from "./db";
 
 const AUTHENTIK_JWKS_URI =
   process.env.AUTHENTIK_JWKS_URI ||
   "https://auth.ctslab.net/application/o/p-assistant/jwks/";
+
+// Authentik userinfo endpoint — used as a fallback to validate a Bearer token when
+// local JWT verification can't (e.g. opaque access tokens, signing/issuer edge cases).
+// Authentik validates the token server-side and returns the claims.
+const AUTHENTIK_USERINFO_URL =
+  process.env.AUTHENTIK_USERINFO_URL ||
+  "https://auth.ctslab.net/application/o/userinfo/";
 
 // Mobile apps authenticate against their OWN Authentik applications, so a mobile token's
 // `iss` is the app issuer (.../o/p-assistant/, .../o/kid-mentor/) — NOT the Dashboard
@@ -12,7 +20,7 @@ const AUTHENTIK_JWKS_URI =
 // the known mobile-app issuers instead (override via AUTHENTIK_MOBILE_ISSUERS, comma-sep).
 const MOBILE_ISSUERS = (
   process.env.AUTHENTIK_MOBILE_ISSUERS ||
-  "https://auth.ctslab.net/application/o/p-assistant/,https://auth.ctslab.net/application/o/kid-mentor/"
+  "https://auth.ctslab.net/application/o/p-assistant/,https://auth.ctslab.net/application/o/kid-mentor/,https://auth.ctslab.net/application/o/ptalk-signature/"
 )
   .split(",")
   .map((s) => s.trim())
@@ -29,13 +37,64 @@ function getJWKS() {
   return jwks;
 }
 
+interface TokenClaims {
+  sub?: string;
+  email?: string;
+  groups?: string[];
+  user_type?: string;
+  name?: string;
+  preferred_username?: string;
+}
+
 /**
- * Verify Bearer token from mobile apps.
- * Returns user info if valid, null if invalid.
- *
- * Mobile apps send Authentik JWT as Bearer token.
- * We verify the JWT signature against Authentik's JWKS,
- * then look up the user in our DB.
+ * Resolve the identity claims of a Bearer token.
+ * 1) Fast path: verify the JWT signature against Authentik's JWKS (any mobile-app issuer).
+ * 2) Fallback: if that fails, introspect via Authentik's userinfo endpoint — this accepts
+ *    opaque access tokens and tolerates signing/issuer mismatches that jose can't verify.
+ * Returns null (and logs the reason) only when the token is genuinely invalid.
+ */
+async function resolveTokenClaims(token: string): Promise<TokenClaims | null> {
+  try {
+    const { payload } = await jwtVerify(token, getJWKS(), { issuer: MOBILE_ISSUERS });
+    return {
+      sub: payload.sub,
+      email: payload.email as string | undefined,
+      groups: payload.groups as string[] | undefined,
+      user_type: payload.user_type as string | undefined,
+      name: payload.name as string | undefined,
+      preferred_username: payload.preferred_username as string | undefined,
+    };
+  } catch (jwtErr) {
+    const jwtMsg = jwtErr instanceof Error ? jwtErr.message : String(jwtErr);
+    try {
+      const res = await fetch(AUTHENTIK_USERINFO_URL, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        console.warn(`[auth] bearer rejected — jwtVerify("${jwtMsg}") + userinfo ${res.status}`);
+        return null;
+      }
+      const info = (await res.json()) as Record<string, unknown>;
+      return {
+        sub: info.sub as string | undefined,
+        email: info.email as string | undefined,
+        groups: info.groups as string[] | undefined,
+        user_type: info.user_type as string | undefined,
+        name: info.name as string | undefined,
+        preferred_username: info.preferred_username as string | undefined,
+      };
+    } catch (uiErr) {
+      const uiMsg = uiErr instanceof Error ? uiErr.message : String(uiErr);
+      console.warn(`[auth] bearer rejected — jwtVerify("${jwtMsg}") + userinfo error("${uiMsg}")`);
+      return null;
+    }
+  }
+}
+
+/**
+ * Verify a Bearer token from the mobile apps and resolve it to a Dashboard user.
+ * JIT-provisions the user on first SSO login. Returns null if the token is invalid.
  */
 export async function verifyBearerToken(
   authHeader: string | null
@@ -47,65 +106,93 @@ export async function verifyBearerToken(
   const token = authHeader.substring(7);
 
   try {
-    // Verify signature against Authentik's JWKS and accept any known mobile-app issuer.
-    const { payload } = await jwtVerify(token, getJWKS(), {
-      issuer: MOBILE_ISSUERS,
-    });
+    const claims = await resolveTokenClaims(token);
+    if (!claims) return null;
 
-    const authentikUserId = payload.sub;
-    const email = payload.email as string | undefined;
+    const authentikUserId = claims.sub;
+    const email = claims.email;
+    if (!authentikUserId) {
+      console.warn("[auth] bearer rejected — token has no `sub`");
+      return null;
+    }
 
-    if (!authentikUserId) return null;
-
-    // Look up user in our business DB by authentik_user_id or email
+    // Look up user in our DB by authentik_user_id or email.
     const [user] = await query<{
       id: string;
       email: string;
       is_superuser: boolean;
+      deleted_at: string | null;
     }>(
-      `SELECT id, email, is_superuser FROM users
+      `SELECT id, email, is_superuser, deleted_at FROM users
        WHERE authentik_user_id = $1 OR email = $2
        LIMIT 1`,
       [authentikUserId, email]
     );
 
-    if (user) return user;
+    if (user) {
+      // Tài khoản đã tự xoá (soft-delete): từ chối kể cả khi access-token còn hạn.
+      if (user.deleted_at) {
+        console.warn("[auth] bearer rejected — account deleted");
+        return null;
+      }
+      return { id: user.id, email: user.email, is_superuser: user.is_superuser };
+    }
 
-    // JIT provisioning: create user if not exists
-    const groups = (payload.groups as string[]) || [];
+    // No email claim → can't provision (email is NOT NULL + the account key).
+    if (!email) {
+      console.warn("[auth] cannot JIT-provision — token has no `email`");
+      return null;
+    }
+
+    // JIT provisioning: create the user on first SSO login.
+    // ptalk_auth requires username + password_hash (NOT NULL) and has NO `role`
+    // column (that lived in the abandoned ptalk_business schema). So: synthetic
+    // username, a non-login password_hash, email_verified=true (Authentik already
+    // verified it), and never overwrite an existing authentik binding.
+    const groups = claims.groups || [];
     const isSuperUser = groups.includes("SuperAdmin");
-    const userType = (payload.user_type as string) || "account_owner";
-    const displayName =
-      (payload.name as string) ||
-      (payload.preferred_username as string) ||
-      email;
+    const userType = claims.user_type || "account_owner";
+    const displayName = claims.name || claims.preferred_username || email;
+
+    const usernameBase =
+      (email.split("@")[0] || claims.preferred_username || "user")
+        .toLowerCase()
+        .replace(/[^a-z0-9_]/g, "")
+        .slice(0, 40) || "user";
+    const username = `${usernameBase}_${String(authentikUserId)
+      .replace(/[^a-z0-9]/gi, "")
+      .slice(0, 8)}`.slice(0, 64);
 
     const [newUser] = await query<{
       id: string;
       email: string;
       is_superuser: boolean;
     }>(
-      `INSERT INTO users (authentik_user_id, email, full_name, display_name, role, user_type, is_superuser, subscription_tier)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'pro')
-       ON CONFLICT (email) DO UPDATE SET authentik_user_id = $1
+      `INSERT INTO users
+         (id, username, email, password_hash, display_name, full_name, user_type,
+          authentik_user_id, subscription_tier, is_active, is_superuser, email_verified)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true, $10, true)
+       ON CONFLICT (email) DO UPDATE
+         SET authentik_user_id = COALESCE(users.authentik_user_id, EXCLUDED.authentik_user_id)
        RETURNING id, email, is_superuser`,
       [
-        authentikUserId,
+        randomUUID(),
+        username,
         email,
+        "!sso-no-local-login", // SSO accounts never authenticate via bcrypt locally
         displayName,
         displayName,
-        isSuperUser ? "super_admin" : "owner",
         userType,
+        authentikUserId,
+        isSuperUser ? "pro" : "basic",
         isSuperUser,
       ]
     );
 
     return newUser;
   } catch (err) {
-    // Invalid/expired token or provisioning error → treat as unauthenticated.
-    if (process.env.NODE_ENV === "development") {
-      console.error("Bearer token verification failed:", err);
-    }
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[auth] verifyBearerToken error: ${msg}`);
     return null;
   }
 }
