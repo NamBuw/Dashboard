@@ -1,0 +1,304 @@
+# branding.yaml — chỉ đổi tên hiển thị + ảnh nền của brand mặc định.
+# Tách riêng khỏi system-setup.yaml để áp dụng độc lập, KHÔNG đụng provider/flow/SSO.
+version: 1
+metadata:
+  name: PTalk Branding
+  labels:
+    blueprints.goauthentik.io/instantiated-by: ptalk-system
+
+entries:
+  - model: authentik_brands.brand
+    id: brand-default
+    state: present
+    identifiers:
+      domain: authentik-default
+    attrs:
+      branding_title: Pthentik
+      # FileBackend lưu tại {storage.path}/media/{schema=public}/<name>; file ở /media/public/ => name chỉ là tên file
+      branding_default_flow_background: bg_ptit.png
+      branding_logo: pthentik-removebg-preview.png
+      # Ngôn ngữ mặc định = English. Lý do: bản authentik này KHÔNG có 'vi' trong allLocales
+      # (cs,de,en,es,fi,fr,it,ja,ko,nl,pl,pt-BR,ru,tr,zh-Hans,zh-Hant) => 'vi' bị bỏ qua,
+      # rơi xuống ngôn ngữ trình duyệt (tiếng Pháp). Đặt 'en' (được hỗ trợ) để thắng auto-detect.
+      attributes:
+        settings:
+          locale: en
+      # CSS tuỳ biến. LƯU Ý: flow chạy trong Shadow DOM, authentik adopt CSS này vào mọi shadow root,
+      # NHƯNG "Powered by authentik" là <ak-brand-links> ở LIGHT DOM (slotted) => phải target trực tiếp.
+      branding_custom_css: |
+        /* === NỀN: ảnh bg_ptit (16:9) không còn logo/dải đỏ => dùng cover full-bleed, đầy màn không viền.
+              Crop mép không sao vì nét vẽ đều, không có nội dung quan trọng ở góc. === */
+        body::before {
+          background-size: cover !important;
+          background-repeat: no-repeat !important;
+          background-position: center center !important;
+          background-color: #ffffff !important;
+        }
+        /* === Thẻ login KÍNH MỜ: trong suốt nhẹ + blur để thấy nền sketch phía sau, chữ vẫn rõ === */
+        .pf-c-login__main {
+          background-color: rgba(255, 255, 255, 0.62) !important;
+          backdrop-filter: blur(12px) saturate(120%) !important;
+          -webkit-backdrop-filter: blur(12px) saturate(120%) !important;
+          border: 1px solid rgba(200, 16, 46, 0.22) !important;
+          border-radius: 18px !important;
+          box-shadow: 0 18px 50px rgba(0, 0, 0, 0.18) !important;
+        }
+        /* === Ẩn "Powered by authentik" (light-DOM, slotted vào footer) === */
+        ak-brand-links { display: none !important; }
+        /* === Ẩn thanh chọn ngôn ngữ -> khoá English, tránh kẹt bản dịch tiếng Pháp thiếu === */
+        ak-locale-select { display: none !important; }
+        /* === Nút Log in: đỏ PTIT (đồng bộ thương hiệu, thay xanh mặc định) === */
+        .pf-c-button.pf-m-primary {
+          --pf-c-button--m-primary--BackgroundColor: #c8102e;
+          --pf-c-button--m-primary--hover--BackgroundColor: #a00d22;
+          --pf-c-button--m-primary--active--BackgroundColor: #a00d22;
+          --pf-c-button--m-primary--focus--BackgroundColor: #a00d22;
+          background-color: #c8102e !important;
+        }
+        /* === Title căn giữa === */
+        h1.pf-c-title.ak-m-clamped { text-align: center !important; }
+        /* === Dòng PTIT: căn giữa, rõ, đọc được trên mọi nền === */
+        .pf-c-login__footer::after {
+          content: "Sản phẩm của PTIT thuộc hệ sinh thái P-Ecosystem";
+          display: block;
+          width: 100%;
+          text-align: center;
+          font-size: 1rem;
+          font-weight: 600;
+          color: #c8102e;
+          background: rgba(255, 255, 255, 0.82);
+          padding: 6px 0;
+        }
+        /* === MOBILE: authentik mặc định ẨN nền (chỉ set body::before background-image trong @media min-width:35rem)
+              và để thẻ full-width. Bật lại nền bằng biến --ak-global--background-image (luôn có ở :root)
+              + căn thẻ thành card có lề, đặc hơn chút cho dễ đọc trên nền nhiều nét vẽ. Chỉ ảnh hưởng <=35rem. === */
+        @media (max-width: 35rem) {
+          /* authentik phủ overlay trắng đục (.pf-c-login::before) trên mobile -> ép transparent để thấy nền */
+          .pf-c-login { --ak-c-login--BackgroundColorOverlay: transparent !important; }
+          /* và set lại ảnh nền cho body::before (authentik chỉ set ở @media min-width:35rem) */
+          body::before {
+            background-image: var(--ak-global--background-image, none) !important;
+            background-size: cover !important;
+            background-position: center center !important;
+          }
+          /* Thẻ thành card có lề, đặc hơn chút cho dễ đọc trên nền nhiều nét vẽ */
+          .pf-c-login__main {
+            margin: 1rem auto !important;
+            width: calc(100% - 2rem) !important;
+            border-radius: 16px !important;
+            background-color: rgba(255, 255, 255, 0.86) !important;
+          }
+          .pf-c-login__footer::after { font-size: 0.8rem; padding: 5px 10px; }
+        }
+
+        /* ============================================================
+           USER PORTAL  — trang sau đăng nhập /if/user/#/library.
+           Selector chỉ tồn tại ở user interface (ak-interface-user, [part=card*],
+           .pf-c-page__title, input[name=application-search]) => KHÔNG đụng flow login.
+           Token khai trên ak-interface-user (ancestor light-DOM) -> biến CSS kế thừa
+           xuyên shadow vào nội dung library.
+           ============================================================ */
+        ak-interface-user {
+          --p-crimson: #c8102e;
+          --p-crimson-deep: #98091f;
+          --p-ink: #18181b;
+          --p-slate: #6b7280;
+          --p-paper: #fbfbfd;
+          --p-mist: #fdf2f3;
+          --p-line: rgba(200, 16, 46, 0.14);
+          display: block !important;
+          min-height: 100vh;
+          background-color: var(--p-paper) !important;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='54' font-family='Arial,sans-serif' font-weight='900' font-size='92' fill='%23c8102e' fill-opacity='0.05' text-anchor='middle' dominant-baseline='central'%3EP%3C/text%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: right -1rem bottom -3rem;
+          background-size: 44vmin;
+        }
+
+        /* Top navbar (thanh trên: logo + chuông/cài đặt/đăng xuất/avatar) — kính mờ, có viền dưới */
+        header.pf-c-page__header {
+          background: rgba(255, 255, 255, 0.82) !important;
+          backdrop-filter: blur(10px) saturate(120%);
+          -webkit-backdrop-filter: blur(10px) saturate(120%);
+          border-bottom: 1px solid var(--p-line, rgba(200, 16, 46, 0.14)) !important;
+          box-shadow: 0 2px 14px rgba(24, 24, 27, 0.05) !important;
+        }
+        header.pf-c-page__header .pf-c-button:hover {
+          color: var(--p-crimson, #c8102e) !important;
+        }
+
+        /* Header: đổi "Application Dashboard" -> lời chào (text gốc giữ trong DOM cho screen reader) */
+        h1.pf-c-page__title {
+          display: flex !important;
+          flex-direction: column;
+          gap: 0.15rem;
+          font-size: 0 !important;
+          line-height: 1.15;
+        }
+        h1.pf-c-page__title::before {
+          content: "Xin chào 👋";
+          font-family: RedHatDisplay, "Segoe UI", system-ui, sans-serif;
+          font-size: 1.9rem;
+          font-weight: 800;
+          letter-spacing: -0.02em;
+          color: var(--p-ink, #18181b);
+        }
+        h1.pf-c-page__title::after {
+          content: "Ứng dụng của bạn · P-Ecosystem";
+          font-size: 0.95rem;
+          font-weight: 600;
+          color: var(--p-crimson, #c8102e);
+        }
+
+        /* Search */
+        input[name="application-search"] {
+          background-color: var(--p-mist, #fdf2f3) !important;
+          border: 1px solid var(--p-line, rgba(200, 16, 46, 0.14)) !important;
+          border-radius: 12px !important;
+          padding: 0.6rem 1rem !important;
+          font-size: var(--pf-global--FontSize--md) !important;
+        }
+        input[name="application-search"]:focus,
+        input[name="application-search"]:hover {
+          border-color: var(--p-crimson, #c8102e) !important;
+          box-shadow: 0 0 0 3px rgba(200, 16, 46, 0.12) !important;
+        }
+
+        /* Group header */
+        [part="app-group-header"] {
+          font-size: 0.78rem !important;
+          font-weight: 700 !important;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: var(--p-slate, #6b7280) !important;
+          border-bottom: 2px solid var(--p-line, rgba(200, 16, 46, 0.14));
+          padding-bottom: 0.35rem !important;
+          margin-bottom: 0.25rem !important;
+        }
+
+        /* App tile */
+        [part="card"] {
+          background: #ffffff !important;
+          border: 1px solid var(--p-line, rgba(200, 16, 46, 0.14)) !important;
+          border-radius: 16px !important;
+          box-shadow: 0 6px 18px rgba(24, 24, 27, 0.06) !important;
+          position: relative;
+          transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease !important;
+        }
+        [part="card"]::before {
+          content: "";
+          position: absolute;
+          inset-block-start: 0;
+          inset-inline: 0;
+          height: 5px;
+          background: linear-gradient(90deg, #e11331, #98091f);
+          border-start-start-radius: 16px;
+          border-start-end-radius: 16px;
+          z-index: 2;
+        }
+        [part="card-wrapper"]:hover [part="card"],
+        [part="card-wrapper"]:focus-within [part="card"] {
+          transform: translateY(-4px);
+          box-shadow: 0 16px 36px rgba(200, 16, 46, 0.18) !important;
+          border-color: var(--p-crimson, #c8102e) !important;
+        }
+        [part="card-title"] .clamp-wrapper {
+          color: var(--p-ink, #18181b) !important;
+          font-weight: 700 !important;
+          -webkit-text-stroke-color: #ffffff;
+        }
+
+        /* Footer brand (cuối danh sách app) — 'main' để loại ak-router-outlet (cũng id=main-content) */
+        main#main-content::after {
+          content: "Sản phẩm của PTIT — hệ sinh thái P-Ecosystem";
+          display: block;
+          margin-top: 2.5rem;
+          padding-top: 1.25rem;
+          border-top: 1px solid var(--p-line, rgba(200, 16, 46, 0.14));
+          text-align: center;
+          font-size: 0.85rem;
+          font-weight: 600;
+          color: var(--p-crimson, #c8102e);
+        }
+
+        /* Empty state */
+        ak-library-application-empty-list h2.pf-c-title {
+          color: var(--p-ink, #18181b) !important;
+        }
+
+        /* Mobile */
+        @media (max-width: 35rem) {
+          ak-interface-user { background-size: 70vmin; }
+          h1.pf-c-page__title::before { font-size: 1.5rem; }
+        }
+
+  # Đổi title các flow mặc định (chỗ hiện "Welcome to authentik!") — chỉ sửa title, giữ nguyên logic flow.
+  - model: authentik_flows.flow
+    state: present
+    identifiers:
+      slug: default-authentication-flow
+    attrs:
+      title: Welcome to Pthentik!
+  - model: authentik_flows.flow
+    state: present
+    identifiers:
+      slug: default-source-authentication
+    attrs:
+      title: Welcome to Pthentik!
+  - model: authentik_flows.flow
+    state: present
+    identifiers:
+      slug: default-source-enrollment
+    attrs:
+      title: Welcome to Pthentik! Please select a username.
+  - model: authentik_flows.flow
+    state: present
+    identifiers:
+      slug: initial-setup
+    attrs:
+      title: Welcome to Pthentik!
+
+  # Metadata hiển thị của app trên trang portal (/if/user/#/library).
+  # CHỈ set icon/group/mô tả/publisher — KHÔNG đụng provider/redirect/flow.
+  # icon = tên file trong media/public (FileBackend base đã gồm media/public).
+  - model: authentik_core.application
+    state: present
+    identifiers:
+      slug: kid-mentor
+    attrs:
+      group: "Giáo dục & Trợ lý"
+      meta_icon: ic_kidmentor.svg
+      meta_publisher: "PTIT · P-Ecosystem"
+      meta_description: "Gia sư AI cho trẻ — học tập an toàn, sinh động."
+      # ẩn tạm khỏi portal web (app mobile, launch URL đang trỏ localhost dev).
+      # Bật lại: xoá dòng dưới (hoặc đặt launch URL web thật). KHÔNG ảnh hưởng SSO.
+      meta_launch_url: "blank://blank"
+  - model: authentik_core.application
+    state: present
+    identifiers:
+      slug: p-assistant
+    attrs:
+      group: "Giáo dục & Trợ lý"
+      meta_icon: ic_passistant.svg
+      meta_publisher: "PTIT · P-Ecosystem"
+      meta_description: "Trợ lý AI cá nhân đồng hành cùng bạn."
+      # ẩn tạm khỏi portal web (lý do như kid-mentor). Bật lại: xoá dòng dưới.
+      meta_launch_url: "blank://blank"
+  - model: authentik_core.application
+    state: present
+    identifiers:
+      slug: dashboard
+    attrs:
+      group: "Quản trị"
+      meta_icon: ic_dashboard.svg
+      meta_publisher: "PTIT · P-Ecosystem"
+      meta_description: "Bảng điều khiển quản trị hệ sinh thái."
+  - model: authentik_core.application
+    state: present
+    identifiers:
+      slug: ctslab
+    attrs:
+      group: "Quản trị"
+      meta_icon: ic_ctslab.svg
+      meta_publisher: "PTIT · P-Ecosystem"
+      meta_description: "Phòng thí nghiệm công nghệ CTS."
